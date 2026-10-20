@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar sesión</title>
+    <!-- Estilos base de la pagina; el formulario es un componente aparte -->
+    <link rel="stylesheet" href="/css/base.css">
+</head>
+<body class="login-page">
+
+    <!-- Componente desacoplado: template html + css + js externos -->
+    <x-login></x-login>
+
+    <!-- Logica de la pagina (escucha al componente y navega) -->
+    <script type="module" src="/js/pages/login.js"></script>
+</body>
+</html>

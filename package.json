@@ -1,0 +1,27 @@
+{
+  "name": "login-session-api",
+  "version": "1.0.0",
+  "description": "API de login con Express Session y PostgreSQL",
+  "main": "server/app.js",
+  "scripts": {
+    "start": "node server/app.js",
+    "dev": "nodemon server/app.js",
+    "db:schema": "node database/runSql.js database/schema.sql",
+    "db:security": "node database/runSql.js database/security.sql",
+    "db:payroll": "node database/runSql.js database/payroll.sql",
+    "db:setup": "npm run db:schema && npm run db:security && npm run seed && npm run db:payroll",
+    "seed": "node database/seed.js",
+    "test": "node --test tests/Security.test.js tests/Dispatcher.test.js tests/PayrollCalculator.test.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "connect-pg-simple": "^9.0.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

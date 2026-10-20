@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Mundial</title>
+    <!-- Estilos base de la pagina; cada componente carga su propio css -->
+    <link rel="stylesheet" href="/css/base.css">
+</head>
+<body class="tema-claro">
+
+    <!-- Componentes desacoplados: template html + css + js externos -->
+    <x-nav></x-nav>
+    <x-panel></x-panel>
+
+    <main class="contenido">
+        <h1 id="seccion-titulo">Selecciona una opción</h1>
+
+        <x-theme-switcher></x-theme-switcher>
+
+        <div id="contenido-dinamico">
+            <p>Toca cualquier subopción del menú para ver su contenido aquí.</p>
+        </div>
+    </main>
+
+    <!-- Logica de la pagina (coordina los componentes) -->
+    <script type="module" src="/js/pages/index.js"></script>
+</body>
+</html>

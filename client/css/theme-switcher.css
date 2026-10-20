@@ -1,0 +1,33 @@
+/* Estilos del componente x-theme-switcher (vistas de fondo) */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: sans-serif;
+}
+
+:host {
+    display: block;
+}
+
+.view-switcher {
+    display: flex;
+    gap: 15px;
+}
+
+.btn-vista {
+    padding: 10px 20px;
+    border: 2px solid #851717;
+    background: white;
+    color: #851717;
+    font-weight: bold;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-vista:hover {
+    background: #851717;
+    color: white;
+}

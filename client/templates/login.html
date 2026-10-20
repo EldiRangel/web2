@@ -1,0 +1,39 @@
+<template>
+    <div class="login-card">
+        <div class="dropdown-wrapper">
+            <div class="user-info">
+                <img src="/images/image.png" class="login-avatar" alt="Usuario">
+                <h2 id="menu-title">Iniciar sesión</h2>
+            </div>
+            <hr>
+
+            <form id="login-form" class="menu-options" novalidate>
+                <label class="menu-item login-field" for="userName">
+                    <div class="menu-item-left">
+                        <img src="/images/image.png" alt="Usuario">
+                        <input id="userName" name="userName" type="email"
+                               placeholder="Usuario (email)" autocomplete="username"
+                               autofocus required>
+                    </div>
+                </label>
+
+                <label class="menu-item login-field" for="password">
+                    <div class="menu-item-left">
+                        <img src="/images/lock.svg" alt="Contraseña">
+                        <input id="password" name="password" type="password"
+                               placeholder="Contraseña" autocomplete="current-password"
+                               required>
+                    </div>
+                </label>
+
+                <p id="login-error" class="login-error hidden"></p>
+
+                <button type="submit" class="menu-item login-btn">
+                    Entrar <span class="arrow">❯</span>
+                </button>
+            </form>
+
+            <p class="login-hint">Demo: ana@example.com · password123</p>
+        </div>
+    </div>
+</template>
