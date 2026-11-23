@@ -39,11 +39,23 @@ CREATE TABLE IF NOT EXISTS employees (
     hire_date       DATE NOT NULL,
     termination_date DATE,
     status          VARCHAR(20) NOT NULL DEFAULT 'ACTIVO',
+    payment_type    VARCHAR(20) NOT NULL DEFAULT 'FIJO',
+    pay_frequency   VARCHAR(20) NOT NULL DEFAULT 'MENSUAL',
+    hourly_rate     NUMERIC(14,2),
+    monthly_hours   NUMERIC(6,2) NOT NULL DEFAULT 160,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT employees_status_check
         CHECK (status IN ('ACTIVO', 'INACTIVO', 'BAJA')),
     CONSTRAINT employees_dates_check
-        CHECK (termination_date IS NULL OR termination_date >= hire_date)
+        CHECK (termination_date IS NULL OR termination_date >= hire_date),
+    CONSTRAINT employees_payment_type_check
+        CHECK (payment_type IN ('FIJO', 'POR_HORA')),
+    CONSTRAINT employees_pay_frequency_check
+        CHECK (pay_frequency IN ('MENSUAL', 'QUINCENAL', 'SEMANAL')),
+    CONSTRAINT employees_hourly_rate_check
+        CHECK (payment_type <> 'POR_HORA' OR (hourly_rate IS NOT NULL AND hourly_rate > 0)),
+    CONSTRAINT employees_monthly_hours_check
+        CHECK (monthly_hours > 0)
 );
 
 CREATE INDEX IF NOT EXISTS employees_status_idx ON employees (status);
@@ -54,7 +66,7 @@ CREATE INDEX IF NOT EXISTS employees_status_idx ON employees (status);
 
 CREATE TABLE IF NOT EXISTS pay_periods (
     id            SERIAL PRIMARY KEY,
-    code          VARCHAR(10) NOT NULL UNIQUE,
+    code          VARCHAR(20) NOT NULL UNIQUE,
     period_type   VARCHAR(20) NOT NULL DEFAULT 'MENSUAL',
     start_date    DATE NOT NULL,
     end_date      DATE NOT NULL,
@@ -62,7 +74,15 @@ CREATE TABLE IF NOT EXISTS pay_periods (
     status        VARCHAR(20) NOT NULL DEFAULT 'ABIERTO',
     created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pay_periods_code_check
-        CHECK (code ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+        CHECK (code ~ '^[0-9]{4}-(0[1-9]|1[0-2])(-Q[1-2]|-W(0[1-9]|[1-4][0-9]|5[0-3]))?$'),
+    CONSTRAINT pay_periods_type_check
+        CHECK (period_type IN ('MENSUAL', 'QUINCENAL', 'SEMANAL')),
+    CONSTRAINT pay_periods_type_code_check
+        CHECK (
+            (period_type = 'MENSUAL' AND code ~ '^[0-9]{4}-(0[1-9]|1[0-2])$')
+            OR (period_type = 'QUINCENAL' AND code ~ '^[0-9]{4}-(0[1-9]|1[0-2])-Q[1-2]$')
+            OR (period_type = 'SEMANAL' AND code ~ '^[0-9]{4}-W(0[1-9]|[1-4][0-9]|5[0-3])$')
+        ),
     CONSTRAINT pay_periods_dates_check
         CHECK (end_date >= start_date),
     CONSTRAINT pay_periods_status_check
@@ -134,12 +154,24 @@ CREATE TABLE IF NOT EXISTS payroll_results (
     employee_id       INTEGER NOT NULL
                       REFERENCES employees(id) ON DELETE RESTRICT,
     base_salary       NUMERIC(14,2) NOT NULL DEFAULT 0,
+    regular_hours     NUMERIC(8,2) NOT NULL DEFAULT 0,
+    hourly_rate       NUMERIC(14,2),
+    payment_type      VARCHAR(20),
+    pay_frequency     VARCHAR(20),
     total_earnings    NUMERIC(14,2) NOT NULL DEFAULT 0,
     total_deductions  NUMERIC(14,2) NOT NULL DEFAULT 0,
     net_amount        NUMERIC(14,2) NOT NULL DEFAULT 0,
     status            VARCHAR(20) NOT NULL DEFAULT 'CALCULADO',
     created_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT payroll_results_unique UNIQUE (run_id, employee_id)
+    CONSTRAINT payroll_results_unique UNIQUE (run_id, employee_id),
+    CONSTRAINT payroll_results_regular_hours_check
+        CHECK (regular_hours >= 0),
+    CONSTRAINT payroll_results_hourly_rate_check
+        CHECK (hourly_rate IS NULL OR hourly_rate > 0),
+    CONSTRAINT payroll_results_payment_type_check
+        CHECK (payment_type IS NULL OR payment_type IN ('FIJO', 'POR_HORA')),
+    CONSTRAINT payroll_results_pay_frequency_check
+        CHECK (pay_frequency IS NULL OR pay_frequency IN ('MENSUAL', 'QUINCENAL', 'SEMANAL'))
 );
 
 CREATE INDEX IF NOT EXISTS payroll_results_employee_idx
@@ -247,6 +279,34 @@ CREATE TABLE IF NOT EXISTS overtime_entries (
 
 CREATE INDEX IF NOT EXISTS overtime_entries_period_idx
     ON overtime_entries (period_id, status);
+
+-- ----------------------------------------------------------------------------
+-- TIME_ENTRIES (horas normales para empleados con pago POR_HORA)
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS time_entries (
+    id          SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL
+                REFERENCES employees(id) ON DELETE CASCADE,
+    work_date   DATE NOT NULL,
+    hours       NUMERIC(6,2) NOT NULL CHECK (hours > 0 AND hours <= 24),
+    hourly_rate NUMERIC(14,2) NOT NULL CHECK (hourly_rate > 0),
+    notes       VARCHAR(255),
+    status      VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    approved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    approved_at TIMESTAMPTZ,
+    applied_at  TIMESTAMPTZ,
+    CONSTRAINT time_entries_employee_date_unique UNIQUE (employee_id, work_date),
+    CONSTRAINT time_entries_status_check
+        CHECK (status IN ('PENDIENTE', 'APROBADO', 'APLICADO', 'CANCELADO'))
+);
+
+CREATE INDEX IF NOT EXISTS time_entries_employee_date_idx
+    ON time_entries (employee_id, work_date);
+CREATE INDEX IF NOT EXISTS time_entries_status_idx
+    ON time_entries (status, work_date);
 
 -- ----------------------------------------------------------------------------
 -- EMPLOYEE_COMPENSATIONS (percepciones recurrentes / salario)
