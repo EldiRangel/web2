@@ -38,12 +38,13 @@ const DEDUCTION_CONCEPT = {
     conceptName: 'Deduccion recurrente'
 };
 
-function employee(id, code) {
+function employee(id, code, overrides = {}) {
     return {
         id,
         employeeCode: code,
         name: `Empleado ${code}`,
-        status: 'ACTIVO'
+        status: 'ACTIVO',
+        ...overrides
     };
 }
 
@@ -155,4 +156,116 @@ test('rechaza una prenomina sin empleados', () => {
         () => calculatePayroll([]),
         error => error.status === 409
     );
+});
+
+test('prorratea un salario mensual a una quincena', () => {
+    const result = calculateEmployee({
+        employee: employee(1, 'DEMO-001', { payFrequency: 'QUINCENAL' }),
+        baseSalary: baseSalary(22000),
+        periodType: 'QUINCENAL'
+    });
+
+    assert.equal(result.baseSalary, 11000);
+    assert.equal(result.lines[0].amount, 11000);
+    assert.equal(result.payFrequency, 'QUINCENAL');
+});
+
+test('prorratea un salario mensual a una semana con el promedio anual', () => {
+    const result = calculateEmployee({
+        employee: employee(1, 'DEMO-001', { payFrequency: 'SEMANAL' }),
+        baseSalary: baseSalary(22000),
+        periodType: 'SEMANAL'
+    });
+
+    assert.equal(result.baseSalary, 5076.92);
+    assert.equal(result.lines[0].amount, 5076.92);
+});
+
+test('calcula un empleado por hora a partir de sus horas normales', () => {
+    const result = calculateEmployee({
+        employee: employee(1, 'DEMO-HORA', {
+            paymentType: 'POR_HORA',
+            payFrequency: 'SEMANAL',
+            hourlyRate: 125
+        }),
+        baseSalary: BASE_CONCEPT,
+        periodType: 'SEMANAL',
+        regularHours: 40
+    });
+
+    assert.equal(result.baseSalary, 5000);
+    assert.equal(result.regularHours, 40);
+    assert.equal(result.hourlyRate, 125);
+    assert.equal(result.lines.length, 1);
+    assert.equal(result.lines[0].quantity, 40);
+    assert.equal(result.lines[0].rate, 125);
+    assert.equal(result.lines[0].sourceType, 'HORAS_NORMALES');
+});
+
+test('un empleado por hora sin horas registradas genera base cero', () => {
+    const result = calculateEmployee({
+        employee: employee(1, 'DEMO-HORA', {
+            paymentType: 'POR_HORA',
+            payFrequency: 'SEMANAL',
+            hourlyRate: 125
+        }),
+        baseSalary: BASE_CONCEPT,
+        periodType: 'SEMANAL',
+        regularHours: 0
+    });
+
+    assert.equal(result.baseSalary, 0);
+    assert.equal(result.lines.length, 0);
+    assert.equal(result.netAmount, 0);
+});
+
+test('rechaza un empleado por hora sin tarifa', () => {
+    assert.throws(
+        () => calculateEmployee({
+            employee: employee(1, 'DEMO-HORA', {
+                paymentType: 'POR_HORA',
+                payFrequency: 'SEMANAL'
+            }),
+            baseSalary: BASE_CONCEPT,
+            periodType: 'SEMANAL',
+            regularHours: 8
+        }),
+        error => error.status === 409 && /tarifa horaria/.test(error.message)
+    );
+});
+
+test('rechaza un empleado cuya frecuencia no coincide con el periodo', () => {
+    assert.throws(
+        () => calculateEmployee({
+            employee: employee(1, 'DEMO-001', { payFrequency: 'QUINCENAL' }),
+            baseSalary: baseSalary(22000),
+            periodType: 'MENSUAL'
+        }),
+        error => error.status === 409 && /frecuencia QUINCENAL/.test(error.message)
+    );
+});
+
+test('suma empleados fijos y por hora en una misma prenomina', () => {
+    const result = calculatePayroll([
+        {
+            employee: employee(1, 'DEMO-FIJO', { payFrequency: 'QUINCENAL' }),
+            baseSalary: baseSalary(22000),
+            periodType: 'QUINCENAL'
+        },
+        {
+            employee: employee(2, 'DEMO-HORA', {
+                paymentType: 'POR_HORA',
+                payFrequency: 'QUINCENAL',
+                hourlyRate: 100
+            }),
+            baseSalary: BASE_CONCEPT,
+            periodType: 'QUINCENAL',
+            regularHours: 40
+        }
+    ]);
+
+    assert.equal(result.totals.salarioBase, 15000);
+    assert.equal(result.totals.percepciones, 15000);
+    assert.equal(result.totals.neto, 15000);
+    assert.equal(result.results[1].regularHours, 40);
 });

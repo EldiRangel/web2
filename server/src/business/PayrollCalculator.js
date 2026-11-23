@@ -15,6 +15,43 @@ function sum(values) {
     return values.reduce((total, value) => total + Number(value || 0), 0);
 }
 
+const PAYMENT_TYPES = new Set(['FIJO', 'POR_HORA']);
+const PAY_FREQUENCIES = new Set(['MENSUAL', 'QUINCENAL', 'SEMANAL']);
+
+// Un salario mensual se convierte al periodo que se esta pagando.
+// Semanal usa el promedio anual de 52 semanas, no una division por cuatro.
+const FREQUENCY_FACTOR = Object.freeze({
+    MENSUAL: 1,
+    QUINCENAL: 0.5,
+    SEMANAL: 12 / 52
+});
+
+function normalizePaymentType(value) {
+    const normalized = String(value || 'FIJO').toUpperCase();
+
+    if (!PAYMENT_TYPES.has(normalized)) {
+        throw new ValidationError('El tipo de pago debe ser FIJO o POR_HORA.');
+    }
+
+    return normalized;
+}
+
+function normalizePayFrequency(value) {
+    const normalized = String(value || 'MENSUAL').toUpperCase();
+
+    if (!PAY_FREQUENCIES.has(normalized)) {
+        throw new ValidationError(
+            'La frecuencia de pago debe ser MENSUAL, QUINCENAL o SEMANAL.'
+        );
+    }
+
+    return normalized;
+}
+
+function periodBaseAmount(monthlyAmount, payFrequency) {
+    return round2(toAmount(monthlyAmount) * FREQUENCY_FACTOR[payFrequency]);
+}
+
 function buildLine({
     conceptId,
     conceptCode,
@@ -51,6 +88,9 @@ function buildLine({
 function calculateEmployee({
     employee,
     baseSalary,
+    periodType = null,
+    regularHours = 0,
+    hourlyRate = null,
     perceptions = [],
     bonuses = [],
     overtime = [],
@@ -61,26 +101,86 @@ function calculateEmployee({
         throw new ValidationError('El empleado es obligatorio para calcular la prenomina.');
     }
 
-    if (!baseSalary || baseSalary.amount === null || baseSalary.amount === undefined) {
+    if (!baseSalary) {
+        throw new ConflictError(
+            `El empleado ${employee.employeeCode} no tiene un salario base vigente.`
+        );
+    }
+
+    const paymentType = normalizePaymentType(employee.paymentType);
+    const payFrequency = normalizePayFrequency(employee.payFrequency);
+
+    if (periodType && normalizePayFrequency(periodType) !== payFrequency) {
+        throw new ConflictError(
+            `El empleado ${employee.employeeCode} tiene frecuencia ${payFrequency} y el periodo es ${periodType}.`
+        );
+    }
+
+    if (paymentType === 'FIJO' && (baseSalary.amount === null || baseSalary.amount === undefined)) {
         throw new ConflictError(
             `El empleado ${employee.employeeCode} no tiene un salario base vigente.`
         );
     }
 
     const lines = [];
-    const baseAmount = toAmount(baseSalary.amount);
+    let baseAmount = 0;
+    let baseQuantity = 1;
+    let baseRate = 0;
+    let baseSourceType = 'COMPENSACION';
+    let baseSourceId = baseSalary.id || null;
+    let effectiveHourlyRate = null;
+    let effectiveRegularHours = 0;
 
-    lines.push(buildLine({
-        conceptId: baseSalary.conceptId,
-        conceptCode: baseSalary.conceptCode,
-        conceptName: baseSalary.conceptName,
-        lineType: 'PERCEPCION',
-        quantity: 1,
-        rate: baseAmount,
-        amount: baseAmount,
-        sourceType: 'COMPENSACION',
-        sourceId: baseSalary.id || null
-    }));
+    if (paymentType === 'POR_HORA') {
+        effectiveHourlyRate = toAmount(hourlyRate ?? employee.hourlyRate);
+
+        if (effectiveHourlyRate <= 0) {
+            throw new ConflictError(
+                `El empleado ${employee.employeeCode} es POR_HORA y no tiene tarifa horaria.`
+            );
+        }
+
+        effectiveRegularHours = round2(toAmount(regularHours));
+
+        if (effectiveRegularHours < 0) {
+            throw new ValidationError('Las horas normales no pueden ser negativas.');
+        }
+
+        baseAmount = round2(effectiveRegularHours * effectiveHourlyRate);
+        baseQuantity = effectiveRegularHours;
+        baseRate = effectiveHourlyRate;
+        baseSourceType = 'HORAS_NORMALES';
+        baseSourceId = null;
+
+        if (effectiveRegularHours > 0) {
+            lines.push(buildLine({
+                conceptId: baseSalary.conceptId,
+                conceptCode: baseSalary.conceptCode,
+                conceptName: baseSalary.conceptName,
+                lineType: 'PERCEPCION',
+                quantity: effectiveRegularHours,
+                rate: effectiveHourlyRate,
+                amount: baseAmount,
+                sourceType: baseSourceType,
+                sourceId: baseSourceId
+            }));
+        }
+    } else {
+        baseAmount = periodBaseAmount(baseSalary.amount, payFrequency);
+        baseRate = baseAmount;
+
+        lines.push(buildLine({
+            conceptId: baseSalary.conceptId,
+            conceptCode: baseSalary.conceptCode,
+            conceptName: baseSalary.conceptName,
+            lineType: 'PERCEPCION',
+            quantity: 1,
+            rate: baseRate,
+            amount: baseAmount,
+            sourceType: baseSourceType,
+            sourceId: baseSourceId
+        }));
+    }
 
     for (const perception of perceptions) {
         lines.push(buildLine({
@@ -174,6 +274,10 @@ function calculateEmployee({
     return {
         employee,
         baseSalary: round2(baseAmount),
+        paymentType,
+        payFrequency,
+        regularHours: effectiveRegularHours,
+        hourlyRate: effectiveHourlyRate,
         lines,
         totalEarnings,
         totalDeductions,
