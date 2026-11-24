@@ -10,8 +10,11 @@ const EXPECTED_METHODS = [
     'Nomina.Empleados.consultar',
     'Nomina.Salarios.consultar',
     'Nomina.Bonos.listar',
+    'Nomina.Bonos.crear',
     'Nomina.HorasExtras.listar',
+    'Nomina.HorasExtras.registrar',
     'Nomina.Prestamos.listar',
+    'Nomina.Tiempo.registrar',
     'Nomina.Prenomina.calcular',
     'Nomina.Prenomina.consultar',
     'Nomina.NominaDefinitiva.consultar',
@@ -80,4 +83,166 @@ test('cerrar exige confirmacion explicita', () => {
         method.validate({ periodo: '2026-11', confirmar: true }),
         { periodo: '2026-11', confirmar: true }
     );
+});
+
+test('Bonos.crear valida y delega en el repositorio', async () => {
+    let received = null;
+    const repository = {
+        async getEmployeeById() {
+            return { id: 1, employeeCode: 'DEMO-001' };
+        },
+        async getPeriodByCode() {
+            return { id: 10, code: '2026-11', status: 'ABIERTO' };
+        },
+        async createBonus(input) {
+            received = input;
+            return {
+                id: 100,
+                employee_id: input.employeeId,
+                concept_id: input.conceptId,
+                period_id: input.periodId,
+                amount: input.amount,
+                reason: input.reason,
+                status: 'PENDIENTE',
+                created_at: '2026-11-23T00:00:00Z'
+            };
+        }
+    };
+
+    const registry = createMethodRegistry({ repository });
+    const method = registry.resolve('Nomina', 'Bonos', 'crear');
+    const params = method.validate({
+        empleadoId: 1,
+        periodo: '2026-11',
+        conceptoId: 2,
+        monto: 1500,
+        motivo: 'Bono prueba',
+        creadoPor: 1
+    });
+    const result = await method.execute(params, { userId: 1 });
+
+    assert.deepEqual(received, {
+        employeeId: 1,
+        periodId: 10,
+        conceptId: 2,
+        amount: 1500,
+        reason: 'Bono prueba',
+        createdBy: 1
+    });
+    assert.equal(result.id, 100);
+    assert.equal(result.monto, 1500);
+    assert.equal(result.estado, 'PENDIENTE');
+});
+
+test('Bonos.crear rechaza periodo cerrado', async () => {
+    const repository = {
+        async getEmployeeById() {
+            return { id: 1, employeeCode: 'DEMO-001' };
+        },
+        async getPeriodByCode() {
+            return { id: 10, code: '2026-09', status: 'CERRADO' };
+        }
+    };
+    const registry = createMethodRegistry({ repository });
+    const method = registry.resolve('Nomina', 'Bonos', 'crear');
+
+    const params = method.validate({
+        empleadoId: 1,
+        periodo: '2026-09',
+        conceptoId: 2,
+        monto: 1500
+    });
+
+    await assert.rejects(
+        () => method.execute(params, { userId: 1 }),
+        /cerrado/
+    );
+});
+
+test('HorasExtras.registrar valida y delega en el repositorio', async () => {
+    let received = null;
+    const repository = {
+        async getEmployeeById() {
+            return { id: 1, employeeCode: 'DEMO-001' };
+        },
+        async getPeriodByCode() {
+            return { id: 10, code: '2026-11', status: 'ABIERTO' };
+        },
+        async createOvertime(input) {
+            received = input;
+            return { id: 200 };
+        }
+    };
+
+    const registry = createMethodRegistry({ repository });
+    const method = registry.resolve('Nomina', 'HorasExtras', 'registrar');
+    const params = method.validate({
+        empleadoId: 1,
+        periodo: '2026-11',
+        fecha: '2026-11-10',
+        horas: 6,
+        tarifaHora: 120,
+        factor: 1.5,
+        conceptoId: 3,
+        creadoPor: 1
+    });
+    const result = await method.execute(params, { userId: 1 });
+
+    assert.deepEqual(received, {
+        employeeId: 1,
+        periodId: 10,
+        conceptId: 3,
+        workDate: '2026-11-10',
+        hours: 6,
+        rateMultiplier: 1.5,
+        hourlyRate: 120,
+        amount: 1080,
+        createdBy: 1
+    });
+    assert.equal(result.importe, 1080);
+    assert.equal(result.estado, 'PENDIENTE');
+});
+
+test('Tiempo.registrar valida y delega en el repositorio', async () => {
+    let received = null;
+    const repository = {
+        async getEmployeeById() {
+            return { id: 1, employeeCode: 'DEMO-001' };
+        },
+        async createTimeEntry(input) {
+            received = input;
+            return {
+                id: 300,
+                employee_id: input.employeeId,
+                work_date: input.workDate,
+                hours: input.hours,
+                hourly_rate: input.hourlyRate,
+                notes: input.notes,
+                status: 'PENDIENTE'
+            };
+        }
+    };
+
+    const registry = createMethodRegistry({ repository });
+    const method = registry.resolve('Nomina', 'Tiempo', 'registrar');
+    const params = method.validate({
+        empleadoId: 1,
+        fecha: '2026-11-10',
+        horas: 8,
+        tarifaHora: 100,
+        notas: 'Turno nocturno',
+        creadoPor: 1
+    });
+    const result = await method.execute(params, { userId: 1 });
+
+    assert.deepEqual(received, {
+        employeeId: 1,
+        workDate: '2026-11-10',
+        hours: 8,
+        hourlyRate: 100,
+        notes: 'Turno nocturno',
+        createdBy: 1
+    });
+    assert.equal(result.horas, 8);
+    assert.equal(result.estado, 'PENDIENTE');
 });
