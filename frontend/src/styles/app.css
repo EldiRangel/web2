@@ -133,6 +133,87 @@ body.login-page #root {
     flex-wrap: wrap;
 }
 
+/* Tarjetas y formularios */
+.card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.card h2 {
+    margin: 0 0 12px 0;
+    font-size: 1.25rem;
+    color: #111827;
+}
+
+.mt {
+    margin-top: 0;
+}
+
+.form-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.form-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    min-width: 100px;
+}
+
+.form-select {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    color: #111827;
+    background: #fff;
+    min-width: 160px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.error {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #dc2626;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.success {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #166534;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.table tr.totals {
+    font-weight: 700;
+    background: #f3f4f6;
+}
+
 .nav-link {
     padding: 6px 14px;
     border: 1px solid #d1d5db;

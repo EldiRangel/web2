@@ -5,6 +5,7 @@ import { Api } from './api/api.js';
 import HomePage from './pages/HomePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import EmpleadosPage from './pages/EmpleadosPage.jsx';
+import PrenominaPage from './pages/PrenominaPage.jsx';
 
 export default function App() {
     const location = useLocation();
@@ -57,7 +58,8 @@ export default function App() {
 
     const navLinks = [
         { to: '/', label: 'Inicio' },
-        { to: '/empleados', label: 'Empleados' }
+        { to: '/empleados', label: 'Empleados' },
+        { to: '/prenomina', label: 'Prenomina' }
     ];
 
     return (
@@ -88,6 +90,12 @@ export default function App() {
                 path="/empleados"
                 element={
                     session ? <EmpleadosPage /> : <Navigate to="/login" replace />
+                }
+            />
+            <Route
+                path="/prenomina"
+                element={
+                    session ? <PrenominaPage /> : <Navigate to="/login" replace />
                 }
             />
             <Route
