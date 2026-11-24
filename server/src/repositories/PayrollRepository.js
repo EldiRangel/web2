@@ -137,6 +137,10 @@ class PayrollRepository {
                     e.department,
                     TO_CHAR(e.hire_date, 'YYYY-MM-DD') AS hire_date,
                     e.status,
+                    e.payment_type,
+                    e.pay_frequency,
+                    e.hourly_rate,
+                    e.monthly_hours,
                     p.name,
                     p.email
              FROM employees e
@@ -154,6 +158,10 @@ class PayrollRepository {
             department: row.department,
             hireDate: row.hire_date,
             status: row.status,
+            paymentType: row.payment_type,
+            payFrequency: row.pay_frequency,
+            hourlyRate: toNumber(row.hourly_rate),
+            monthlyHours: toNumber(row.monthly_hours),
             name: row.name,
             email: row.email
         }));
@@ -637,14 +645,19 @@ class PayrollRepository {
             for (const employeeResult of results) {
                 const resultInsert = await client.query(
                     `INSERT INTO payroll_results
-                         (run_id, employee_id, base_salary, total_earnings,
-                          total_deductions, net_amount, status)
-                     VALUES ($1, $2, $3, $4, $5, $6, 'CALCULADO')
+                         (run_id, employee_id, base_salary, regular_hours,
+                          hourly_rate, payment_type, pay_frequency,
+                          total_earnings, total_deductions, net_amount, status)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'CALCULADO')
                      RETURNING id`,
                     [
                         run.id,
                         employeeResult.employee.id,
                         employeeResult.baseSalary,
+                        employeeResult.regularHours,
+                        employeeResult.hourlyRate,
+                        employeeResult.paymentType,
+                        employeeResult.payFrequency,
                         employeeResult.totalEarnings,
                         employeeResult.totalDeductions,
                         employeeResult.netAmount
@@ -1132,6 +1145,28 @@ class PayrollRepository {
                 pagosGenerados: paymentsResult.rowCount
             };
         });
+    }
+
+    async getApprovedTimeEntries(periodId, employeeIds) {
+        const result = await this._query(
+            `SELECT t.employee_id,
+                    SUM(t.hours) AS total_hours,
+                    MAX(t.hourly_rate) AS hourly_rate
+             FROM time_entries t
+             INNER JOIN pay_periods pp
+                 ON t.work_date BETWEEN pp.start_date AND pp.end_date
+             WHERE pp.id = $1
+               AND t.status = 'APROBADO'
+               AND t.employee_id = ANY($2::int[])
+             GROUP BY t.employee_id`,
+            [periodId, employeeIds]
+        );
+
+        return result.rows.map(row => ({
+            employeeId: row.employee_id,
+            hours: toNumber(row.total_hours),
+            hourlyRate: toNumber(row.hourly_rate)
+        }));
     }
 }
 

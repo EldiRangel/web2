@@ -108,14 +108,16 @@ class Prenomina {
             deductions,
             bonuses,
             overtime,
-            loanInstallments
+            loanInstallments,
+            timeEntries
         ] = await Promise.all([
             this.repository.getBaseSalaries(ids, period.endDate),
             this.repository.getRecurringPerceptions(period.id, ids),
             this.repository.getRecurringDeductions(period.id, ids),
             this.repository.getApprovedBonuses(period.id, ids),
             this.repository.getApprovedOvertime(period.id, ids),
-            this.repository.getScheduledLoanInstallments(period.id, ids)
+            this.repository.getScheduledLoanInstallments(period.id, ids),
+            this.repository.getApprovedTimeEntries(period.id, ids)
         ]);
 
         const salaryByEmployee = new Map(
@@ -134,11 +136,16 @@ class Prenomina {
         const bonusesByEmployee = groupByEmployee(bonuses);
         const overtimeByEmployee = groupByEmployee(overtime);
         const installmentsByEmployee = groupByEmployee(loanInstallments);
+        const timeEntriesByEmployee = new Map(
+            timeEntries.map(entry => [entry.employeeId, entry])
+        );
 
         const calculation = this.calculator.calculatePayroll(
             employees.map(employee => ({
                 employee,
                 baseSalary: salaryByEmployee.get(employee.id),
+                periodType: period.periodType,
+                regularHours: timeEntriesByEmployee.get(employee.id)?.hours ?? 0,
                 perceptions: perceptionsByEmployee.get(employee.id) || [],
                 bonuses: bonusesByEmployee.get(employee.id) || [],
                 overtime: overtimeByEmployee.get(employee.id) || [],
