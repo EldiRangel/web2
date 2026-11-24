@@ -1168,6 +1168,46 @@ class PayrollRepository {
             hourlyRate: toNumber(row.hourly_rate)
         }));
     }
+
+    async createBonus({ employeeId, periodId, conceptId, amount, reason, createdBy }) {
+        return this._withTransaction(async client => {
+            const result = await client.query(
+                `INSERT INTO bonus_entries
+                     (employee_id, concept_id, period_id, amount, reason, status, created_by)
+                 VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6::int)
+                 RETURNING id, employee_id, concept_id, period_id, amount, reason, status, created_at`,
+                [employeeId, conceptId, periodId, amount, reason, createdBy]
+            );
+            return result.rows[0];
+        });
+    }
+
+    async createOvertime({ employeeId, periodId, conceptId, workDate, hours, rateMultiplier, hourlyRate, amount, createdBy }) {
+        return this._withTransaction(async client => {
+            const result = await client.query(
+                `INSERT INTO overtime_entries
+                     (employee_id, concept_id, period_id, work_date, hours, rate_multiplier,
+                      hourly_rate, amount, status, created_by)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDIENTE', $9::int)
+                 RETURNING id`,
+                [employeeId, conceptId, periodId, workDate, hours, rateMultiplier, hourlyRate, amount, createdBy]
+            );
+            return result.rows[0];
+        });
+    }
+
+    async createTimeEntry({ employeeId, workDate, hours, hourlyRate, notes, createdBy }) {
+        return this._withTransaction(async client => {
+            const result = await client.query(
+                `INSERT INTO time_entries
+                     (employee_id, work_date, hours, hourly_rate, notes, status, created_by)
+                 VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6::int)
+                 RETURNING id`,
+                [employeeId, workDate, hours, hourlyRate, notes, createdBy]
+            );
+            return result.rows[0];
+        });
+    }
 }
 
 module.exports = PayrollRepository;
