@@ -1208,6 +1208,70 @@ class PayrollRepository {
             return result.rows[0];
         });
     }
+
+    async approveBonus(bonusId, approvedBy) {
+        return this._withTransaction(async client => {
+            const result = await client.query(
+                `UPDATE bonus_entries
+                 SET status = 'APROBADO',
+                     approved_by = $2::int,
+                     applied_at = CURRENT_TIMESTAMP
+                 WHERE id = $1
+                   AND status = 'PENDIENTE'
+                 RETURNING id, status`,
+                [bonusId, approvedBy]
+            );
+            if (result.rows.length === 0) {
+                throw new NotFoundError(
+                    'Bono no encontrado o ya fue aprobado/cancelado.'
+                );
+            }
+            return result.rows[0];
+        });
+    }
+
+    async approveOvertime(overtimeId, approvedBy) {
+        return this._withTransaction(async client => {
+            const result = await client.query(
+                `UPDATE overtime_entries
+                 SET status = 'APROBADO',
+                     approved_by = $2::int,
+                     applied_at = CURRENT_TIMESTAMP
+                 WHERE id = $1
+                   AND status = 'PENDIENTE'
+                 RETURNING id, status`,
+                [overtimeId, approvedBy]
+            );
+            if (result.rows.length === 0) {
+                throw new NotFoundError(
+                    'Horas extra no encontradas o ya fueron aprobadas/canceladas.'
+                );
+            }
+            return result.rows[0];
+        });
+    }
+
+    async approveTimeEntry(timeEntryId, approvedBy) {
+        return this._withTransaction(async client => {
+            const result = await client.query(
+                `UPDATE time_entries
+                 SET status = 'APROBADO',
+                     approved_by = $2::int,
+                     applied_at = CURRENT_TIMESTAMP
+                 WHERE id = $1
+                   AND status = 'PENDIENTE'
+                 RETURNING id, status`,
+                [timeEntryId, approvedBy]
+            );
+            if (result.rows.length === 0) {
+                throw new NotFoundError(
+                    'Registro de tiempo no encontrado o ya fue aprobado/cancelado.'
+                );
+            }
+            return result.rows[0];
+        });
+    }
 }
 
 module.exports = PayrollRepository;
+

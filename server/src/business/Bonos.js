@@ -63,7 +63,7 @@ class Bonos {
         }
 
         const result = await this.repository.createBonus({
-            employeeId,
+            employeeId: empleadoId,
             periodId: period.id,
             conceptId: conceptoId,
             amount,
@@ -79,6 +79,20 @@ class Bonos {
             conceptoId: result.concept_id,
             monto: result.amount,
             motivo: result.reason,
+            estado: result.status,
+            moneda: 'MXN'
+        };
+    }
+
+    async aprobar({ bonoId, aprobadoPor }) {
+        if (!Number.isSafeInteger(bonoId) || bonoId <= 0) {
+            throw new ValidationError('El campo bonoId es obligatorio y debe ser un entero positivo.');
+        }
+
+        const result = await this.repository.approveBonus(bonoId, aprobadoPor);
+
+        return {
+            id: result.id,
             estado: result.status,
             moneda: 'MXN'
         };

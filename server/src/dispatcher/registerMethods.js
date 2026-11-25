@@ -375,6 +375,23 @@ function registerBusinessMethods(registry, repository) {
 
     registry.register({
         subsystem: SUBSYSTEM,
+        className: 'Bonos',
+        method: 'aprobar',
+        validate: params => {
+            const data = ensureBusinessParams(params);
+            return {
+                bonoId: requireBusinessPositiveInteger(data, 'bonoId'),
+                aprobadoPor: data.aprobadoPor
+            };
+        },
+        execute: (params, context) => bonos.aprobar({
+            bonoId: params.bonoId,
+            aprobadoPor: context && context.userId ? context.userId : params.aprobadoPor
+        })
+    });
+
+    registry.register({
+        subsystem: SUBSYSTEM,
         className: 'HorasExtras',
         method: 'listar',
         validate: params => {
@@ -418,6 +435,23 @@ function registerBusinessMethods(registry, repository) {
 
     registry.register({
         subsystem: SUBSYSTEM,
+        className: 'HorasExtras',
+        method: 'aprobar',
+        validate: params => {
+            const data = ensureBusinessParams(params);
+            return {
+                horasExtraId: requireBusinessPositiveInteger(data, 'horasExtraId'),
+                aprobadoPor: data.aprobadoPor
+            };
+        },
+        execute: (params, context) => horasExtras.aprobar({
+            horasExtraId: params.horasExtraId,
+            aprobadoPor: context && context.userId ? context.userId : params.aprobadoPor
+        })
+    });
+
+    registry.register({
+        subsystem: SUBSYSTEM,
         className: 'Prestamos',
         method: 'listar',
         validate: params => {
@@ -449,6 +483,23 @@ function registerBusinessMethods(registry, repository) {
             tarifaHora: params.tarifaHora,
             notas: params.notas,
             creadoPor: context && context.userId ? context.userId : params.creadoPor
+        })
+    });
+
+    registry.register({
+        subsystem: SUBSYSTEM,
+        className: 'Tiempo',
+        method: 'aprobar',
+        validate: params => {
+            const data = ensureBusinessParams(params);
+            return {
+                tiempoId: requireBusinessPositiveInteger(data, 'tiempoId'),
+                aprobadoPor: data.aprobadoPor
+            };
+        },
+        execute: (params, context) => tiempo.aprobar({
+            tiempoId: params.tiempoId,
+            aprobadoPor: context && context.userId ? context.userId : params.aprobadoPor
         })
     });
 

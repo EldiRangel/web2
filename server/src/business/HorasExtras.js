@@ -75,7 +75,7 @@ class HorasExtras {
         }
 
         const result = await this.repository.createOvertime({
-            employeeId,
+            employeeId: empleadoId,
             periodId: period.id,
             conceptId: conceptoId,
             workDate: fecha,
@@ -97,6 +97,20 @@ class HorasExtras {
             factor: multiplier,
             importe: amount,
             estado: 'PENDIENTE',
+            moneda: 'MXN'
+        };
+    }
+
+    async aprobar({ horasExtraId, aprobadoPor }) {
+        if (!Number.isSafeInteger(horasExtraId) || horasExtraId <= 0) {
+            throw new ValidationError('El campo horasExtraId es obligatorio y debe ser un entero positivo.');
+        }
+
+        const result = await this.repository.approveOvertime(horasExtraId, aprobadoPor);
+
+        return {
+            id: result.id,
+            estado: result.status,
             moneda: 'MXN'
         };
     }

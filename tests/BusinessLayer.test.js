@@ -11,10 +11,13 @@ const EXPECTED_METHODS = [
     'Nomina.Salarios.consultar',
     'Nomina.Bonos.listar',
     'Nomina.Bonos.crear',
+    'Nomina.Bonos.aprobar',
     'Nomina.HorasExtras.listar',
     'Nomina.HorasExtras.registrar',
+    'Nomina.HorasExtras.aprobar',
     'Nomina.Prestamos.listar',
     'Nomina.Tiempo.registrar',
+    'Nomina.Tiempo.aprobar',
     'Nomina.Prenomina.calcular',
     'Nomina.Prenomina.consultar',
     'Nomina.NominaDefinitiva.consultar',
@@ -245,4 +248,68 @@ test('Tiempo.registrar valida y delega en el repositorio', async () => {
     });
     assert.equal(result.horas, 8);
     assert.equal(result.estado, 'PENDIENTE');
+});
+
+test('Bonos.aprobar valida y delega en el repositorio', async () => {
+    const repository = {
+        async approveBonus(id, approvedBy) {
+            assert.equal(id, 100);
+            assert.equal(approvedBy, 1);
+            return { id: 100, status: 'APROBADO' };
+        }
+    };
+
+    const registry = createMethodRegistry({ repository });
+    const method = registry.resolve('Nomina', 'Bonos', 'aprobar');
+    const params = method.validate({ bonoId: 100, aprobadoPor: 1 });
+    const result = await method.execute(params, { userId: 1 });
+
+    assert.equal(result.id, 100);
+    assert.equal(result.estado, 'APROBADO');
+});
+
+test('Bonos.aprobar rechaza ID invalido', () => {
+    const registry = createMethodRegistry({ repository: {} });
+    const method = registry.resolve('Nomina', 'Bonos', 'aprobar');
+
+    assert.throws(
+        () => method.validate({ bonoId: 0, aprobadoPor: 1 }),
+        /entero positivo/
+    );
+});
+
+test('HorasExtras.aprobar valida y delega en el repositorio', async () => {
+    const repository = {
+        async approveOvertime(id, approvedBy) {
+            assert.equal(id, 200);
+            assert.equal(approvedBy, 1);
+            return { id: 200, status: 'APROBADO' };
+        }
+    };
+
+    const registry = createMethodRegistry({ repository });
+    const method = registry.resolve('Nomina', 'HorasExtras', 'aprobar');
+    const params = method.validate({ horasExtraId: 200, aprobadoPor: 1 });
+    const result = await method.execute(params, { userId: 1 });
+
+    assert.equal(result.id, 200);
+    assert.equal(result.estado, 'APROBADO');
+});
+
+test('Tiempo.aprobar valida y delega en el repositorio', async () => {
+    const repository = {
+        async approveTimeEntry(id, approvedBy) {
+            assert.equal(id, 300);
+            assert.equal(approvedBy, 1);
+            return { id: 300, status: 'APROBADO' };
+        }
+    };
+
+    const registry = createMethodRegistry({ repository });
+    const method = registry.resolve('Nomina', 'Tiempo', 'aprobar');
+    const params = method.validate({ tiempoId: 300, aprobadoPor: 1 });
+    const result = await method.execute(params, { userId: 1 });
+
+    assert.equal(result.id, 300);
+    assert.equal(result.estado, 'APROBADO');
 });

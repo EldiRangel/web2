@@ -31,7 +31,7 @@ class Tiempo {
         }
 
         const result = await this.repository.createTimeEntry({
-            employeeId,
+            employeeId: empleadoId,
             workDate: fecha,
             hours,
             hourlyRate: rate,
@@ -47,6 +47,20 @@ class Tiempo {
             horas: result.hours,
             tarifaHora: result.hourly_rate,
             notas: result.notes,
+            estado: result.status,
+            moneda: 'MXN'
+        };
+    }
+
+    async aprobar({ tiempoId, aprobadoPor }) {
+        if (!Number.isSafeInteger(tiempoId) || tiempoId <= 0) {
+            throw new ValidationError('El campo tiempoId es obligatorio y debe ser un entero positivo.');
+        }
+
+        const result = await this.repository.approveTimeEntry(tiempoId, aprobadoPor);
+
+        return {
+            id: result.id,
             estado: result.status,
             moneda: 'MXN'
         };
