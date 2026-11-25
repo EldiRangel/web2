@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - Nómina</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="login-root">
+        <div class="login-wrap">
+            <div class="login-brand">
+                <div class="brand-mark">N</div>
+                <div class="brand-name">Nómina</div>
+            </div>
+
+            <form class="login-form" id="login-form">
+                <div class="field">
+                    <label for="login-email">Correo electrónico</label>
+                    <input
+                        id="login-email"
+                        name="userName"
+                        type="email"
+                        placeholder="ana@example.com"
+                        autoComplete="email"
+                        autoFocus
+                        required
+                    />
+                </div>
+
+                <div class="field">
+                    <label for="login-password">Contraseña</label>
+                    <input
+                        id="login-password"
+                        name="password"
+                        type="password"
+                        placeholder="••••••••"
+                        autoComplete="current-password"
+                        required
+                    />
+                </div>
+
+                <p id="login-error" class="login-error" style="display:none;"></p>
+
+                <button type="submit" class="login-btn" id="login-btn">Ingresar</button>
+            </form>
+
+            <p class="login-hint">
+                Demo: <strong>ana@example.com</strong> / <strong>password123</strong>
+            </p>
+        </div>
+    </div>
+
+    <script type="module" src="/js/app.js"></script>
+</body>
+</html>
