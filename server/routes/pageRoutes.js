@@ -1,19 +1,30 @@
-const path    = require('path');
+'use strict';
+
 const express = require('express');
+const path = require('path');
 
-const router     = express.Router();
-const CLIENT_DIR = path.join(__dirname, '..', '..', 'client');
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
-// El index solo se entrega si hay sesion activa
-router.get('/', (req, res) => {
-    if (!req.session.user) return res.redirect('/login');
-    res.sendFile(path.join(CLIENT_DIR, 'index.html'));
-});
+/**
+ * Rutas HTML del frontend simple.
+ *
+ * El servidor conserva el control de acceso: "/" solo se entrega con sesion y
+ * "/login" solo sin sesion. El frontend valida la sesion contra el API.
+ */
+function createPageRoutes() {
+    const router = express.Router();
 
-// El login no se muestra si ya hay sesion activa
-router.get('/login', (req, res) => {
-    if (req.session.user) return res.redirect('/');
-    res.sendFile(path.join(CLIENT_DIR, 'login.html'));
-});
+    router.get('/', (req, res) => {
+        if (!req.session.user) return res.redirect('/login');
+        return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+    });
 
-module.exports = router;
+    router.get('/login', (req, res) => {
+        if (req.session.user) return res.redirect('/');
+        return res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
+    });
+
+    return router;
+}
+
+module.exports = createPageRoutes;

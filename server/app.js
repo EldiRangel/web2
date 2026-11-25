@@ -1,56 +1,73 @@
 ﻿require('dotenv').config();
-const path    = require('path');
 const express = require('express');
+const path = require('path');
 
 const sessionMiddleware = require('./config/session');
-const pageRoutes        = require('./routes/pageRoutes');
-const authRoutes        = require('./routes/authRoutes');
-const errorHandler      = require('./middleware/errorHandler');
-const security          = require('./src/security');
+const createPageRoutes = require('./routes/pageRoutes');
+const authRoutes = require('./routes/authRoutes');
+const errorHandler = require('./middleware/errorHandler');
+const security = require('./src/security');
 const { createDispatcherRouter } = require('./src/dispatcher/Server');
 
-const app  = express();
 const PORT = process.env.PORT || 3000;
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
-// El cliente (html, css, js, imagenes) vive aparte, en su propia carpeta
-const CLIENT_DIR = path.join(__dirname, '..', 'client');
+async function createApp() {
+    const app = express();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
 
-// Archivos estaticos del cliente
-app.use(express.static(CLIENT_DIR, { index: false }));
+    // Sesion de Express. Debe ejecutarse antes de las paginas y del API.
+    app.use(sessionMiddleware);
 
-// Sesion de Express
-app.use(sessionMiddleware);
+    // Archivos estáticos del frontend (HTML, CSS, JS vanilla)
+    app.use(express.static(PUBLIC_DIR));
 
-// Paginas (protegidas segun la sesion)
-app.use(pageRoutes);
-
-// API
-app.get('/api', (req, res) => {
-    res.json({
-        success: true,
-        message: 'API activa. POST /api/auth/login | POST /api/dispatcher'
+    // API
+    app.get('/api', (req, res) => {
+        res.json({
+            success: true,
+            message: 'API activa. POST /api/auth/login | POST /api/dispatcher'
+        });
     });
-});
 
-app.use('/api', authRoutes);
+    app.use('/api', authRoutes);
 
-// Unico endpoint para operaciones de negocio.
-// La identidad se obtiene de req.session dentro del Dispatcher.
-app.use('/api', createDispatcherRouter({ security }));
+    // Unico endpoint para operaciones de negocio.
+    // La identidad se obtiene de req.session dentro del Dispatcher.
+    app.use('/api', createDispatcherRouter({ security }));
 
-app.use((req, res) => {
-    res.status(404).json({ success: false, message: 'Ruta no encontrada' });
-});
+    // Paginas del frontend simple (protegidas según la sesión)
+    app.use(createPageRoutes());
 
-app.use(errorHandler);
+    app.use((req, res) => {
+        res.status(404).json({ success: false, message: 'Ruta no encontrada' });
+    });
 
-if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(`Server (Dispatcher) escuchando en http://localhost:${PORT}`);
+    app.use(errorHandler);
+
+    return app;
+}
+
+async function start() {
+    const app = await createApp();
+
+    return app.listen(PORT, () => {
+        const url = `http://localhost:${PORT}`;
+        console.log(`Server (Dispatcher) escuchando en ${url}`);
+        console.log(`Frontend simple disponible en ${url}`);
     });
 }
 
-module.exports = app;
+if (require.main === module) {
+    start().catch(error => {
+        console.error('[Server] No se pudo iniciar:', error);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    createApp,
+    start
+};
