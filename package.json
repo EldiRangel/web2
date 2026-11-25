@@ -5,13 +5,14 @@
   "main": "server/app.js",
   "scripts": {
     "start": "node server/app.js",
+    "start:prod": "node server/start.js",
     "dev": "nodemon server/app.js",
     "db:schema": "node database/runSql.js database/schema.sql",
     "db:security": "node database/runSql.js database/security.sql",
     "db:payroll": "node database/runSql.js database/payroll.sql",
     "db:setup": "npm run db:schema && npm run db:security && npm run seed && npm run db:payroll",
     "seed": "node database/seed.js",
-    "test": "node --test tests/Security.test.js tests/Dispatcher.test.js tests/PayrollCalculator.test.js"
+    "test": "node tests/runTests.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
