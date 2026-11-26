@@ -2,39 +2,32 @@
 // Aplicacion - Sistema de Nomina (Vanilla JS)
 // =========================================
 
-import { Api } from './api.js';
+import { Api, PayrollApi } from './api.js';
 
 const STATE = {
     session: null,
-    currentPage: 'login'
+    currentPage: 'dashboard'
 };
 
-// Elementos DOM
-const loginRoot = document.getElementById('login-root');
+// Elementos DOM (solo existen en index.html / panel)
 const appRoot = document.getElementById('app-root');
 const topbarUser = document.getElementById('topbar-user');
+const btnLogout = document.getElementById('btn-logout');
 const mainContent = document.getElementById('main-content');
 
 // =========================================
 // Navegacion
 // =========================================
 
-function showLogin() {
-    loginRoot.style.display = 'flex';
-    appRoot.style.display = 'none';
-    STATE.currentPage = 'login';
-}
-
 function showApp() {
-    loginRoot.style.display = 'none';
     appRoot.style.display = 'flex';
-    STATE.currentPage = 'app';
-    renderDashboard();
+    STATE.currentPage = 'dashboard';
+    renderCurrentPage();
 }
 
 function navigateTo(page) {
     STATE.currentPage = page;
-    renderDashboard();
+    renderCurrentPage();
 }
 
 // =========================================
@@ -46,55 +39,14 @@ async function checkSession() {
         const { ok, data } = await Api.getSession();
         if (ok && data && data.session) {
             STATE.session = data.session;
+            if (topbarUser) topbarUser.textContent = STATE.session.Name || 'Usuario';
             showApp();
         } else {
-            showLogin();
+            window.location.replace('/login');
         }
     } catch (error) {
         console.error('No se pudo verificar la sesion:', error);
-        showLogin();
-    }
-}
-
-async function handleLogin(event) {
-    event.preventDefault();
-
-    const userName = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-    const errorEl = document.getElementById('login-error');
-    const btn = document.getElementById('login-btn');
-
-    errorEl.textContent = '';
-    errorEl.style.display = 'none';
-
-    if (!userName || !password) {
-        errorEl.textContent = 'Correo y contraseña son obligatorios';
-        errorEl.style.display = 'block';
-        return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = 'Ingresando...';
-
-    try {
-        const { ok, data } = await Api.login(userName, password);
-
-        if (!ok || !data || !data.success) {
-            errorEl.textContent = (data && data.message) || 'No se pudo iniciar sesión';
-            errorEl.style.display = 'block';
-            return;
-        }
-
-        STATE.session = data.session;
-        topbarUser.textContent = STATE.session.Name || 'Usuario';
-        showApp();
-    } catch (err) {
-        console.error('[Login]', err);
-        errorEl.textContent = 'Error de conexión con el servidor';
-        errorEl.style.display = 'block';
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Ingresar';
+        window.location.replace('/login');
     }
 }
 
@@ -102,12 +54,10 @@ async function handleLogout() {
     try {
         await Api.logout();
     } catch (error) {
-        console.error('Error al cerrar sesión:', error);
+        console.error('Error al cerrar sesion:', error);
     }
     STATE.session = null;
-    document.getElementById('login-email').value = '';
-    document.getElementById('login-password').value = '';
-    showLogin();
+    window.location.replace('/login');
 }
 
 // =========================================
@@ -122,9 +72,9 @@ function formatMoney(value) {
 }
 
 function escapeHtml(text) {
-    if (!text) return '';
+    if (text === null || text === undefined) return '';
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = String(text);
     return div.innerHTML;
 }
 
@@ -295,7 +245,7 @@ async function renderPrenomina() {
                 return;
             }
 
-            successEl.textContent = `Prenomina calculada: ${data.empleados} empleado(s), run #${data.runNumero}`;
+            successEl.textContent = `Prenomina calculada: ${data.lineas.length} empleado(s), run #${data.runNumero}`;
             successEl.style.display = 'block';
 
             renderPrenominaResultado(data);
@@ -341,24 +291,40 @@ async function renderPrenomina() {
     btnConsultar.onclick = consultar;
 }
 
+/**
+ * Renderiza el resultado de la prenomina.
+ *
+ * Acepta ambas formas de respuesta:
+ *  - Prenomina.calcular -> data.lineas (array de lineas resumen)
+ *  - Prenomina.consultar -> data.resultados (array de resultados con lineas)
+ */
 function renderPrenominaResultado(data) {
     const resultadoEl = document.getElementById('prenomina-resultado');
-    const rows = data.resultados.map(emp => `
+
+    // data.lineas viene de calcular; data.resultados viene de consultar
+    const empleados = Array.isArray(data.lineas)
+        ? data.lineas
+        : Array.isArray(data.resultados)
+            ? data.resultados
+            : [];
+
+    const rows = empleados.map(emp => `
         <tr>
             <td>${escapeHtml(emp.codigo)} — ${escapeHtml(emp.nombre)}</td>
             <td>${formatMoney(emp.salarioBase)}</td>
-            <td>${formatMoney(emp.percepciones)}</td>
+            <td>${formatMoney(emp.percepciones ?? emp.bruto)}</td>
             <td>${formatMoney(emp.deducciones)}</td>
             <td>${formatMoney(emp.neto)}</td>
         </tr>
     `).join('');
 
+    const totales = data.totales || {};
     const totalRow = `
         <tr style="font-weight:700; background:#f3f4f6;">
             <td colSpan="2">Totales</td>
-            <td>${formatMoney(data.totales.percepciones)}</td>
-            <td>${formatMoney(data.totales.deducciones)}</td>
-            <td>${formatMoney(data.totales.neto)}</td>
+            <td>${formatMoney(totales.percepciones ?? totales.bruto)}</td>
+            <td>${formatMoney(totales.deducciones)}</td>
+            <td>${formatMoney(totales.neto)}</td>
         </tr>
     `;
 
@@ -716,8 +682,9 @@ window.app = {
     }
 };
 
-document.getElementById('login-form').addEventListener('submit', handleLogin);
-document.getElementById('btn-logout').addEventListener('click', handleLogout);
+if (btnLogout) {
+    btnLogout.addEventListener('click', handleLogout);
+}
 
 // Verificar sesion al cargar
 checkSession();

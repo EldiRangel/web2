@@ -21,8 +21,15 @@ async function createApp() {
     // Sesion de Express. Debe ejecutarse antes de las paginas y del API.
     app.use(sessionMiddleware);
 
+    // Paginas del frontend simple (protegidas según la sesión).
+    // Se montan ANTES de express.static para que "/" nunca sirva index.html
+    // sin sesion y para cubrir las variantes .html.
+    app.use(createPageRoutes());
+
     // Archivos estáticos del frontend (HTML, CSS, JS vanilla)
-    app.use(express.static(PUBLIC_DIR));
+    // index: false para que express.static no sirva index.html en "/" ni en
+    // otras rutas, dejando el control de acceso a createPageRoutes().
+    app.use(express.static(PUBLIC_DIR, { index: false }));
 
     // API
     app.get('/api', (req, res) => {

@@ -74,7 +74,7 @@ export const PayrollApi = {
         return Api.dispatch(operation(3, 1, { empleadoId, periodo }));
     },
     createBonus({ empleadoId, periodo, conceptoId, monto, motivo, creadoPor }) {
-        return Api.dispatch(operation(3, 2, {
+        return Api.dispatch(operation(3, 32, {
             empleadoId, periodo, conceptoId, monto, motivo, creadoPor
         }));
     },
@@ -84,14 +84,14 @@ export const PayrollApi = {
         return Api.dispatch(operation(4, 4, { empleadoId, periodo }));
     },
     createOvertime({ empleadoId, periodo, fecha, horas, tarifaHora, factor, conceptoId, creadoPor }) {
-        return Api.dispatch(operation(4, 5, {
+        return Api.dispatch(operation(4, 37, {
             empleadoId, periodo, fecha, horas, tarifaHora, factor, conceptoId, creadoPor
         }));
     },
 
     // Tiempo (horas normales)
     createTimeEntry({ empleadoId, fecha, horas, tarifaHora, notas, creadoPor }) {
-        return Api.dispatch(operation(8, 1, {
+        return Api.dispatch(operation(27, 45, {
             empleadoId, fecha, horas, tarifaHora, notas, creadoPor
         }));
     },
