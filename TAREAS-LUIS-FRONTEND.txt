@@ -1,0 +1,135 @@
+================================================================================
+  TAREAS DE FRONTEND - COMPAÑERO LUIS
+  Proyecto: Sistema de Nómina (Express Session)
+  Ruta: C:\Users\Eldi\Desktop\Web2\Express Session
+================================================================================
+
+ESTADO ACTUAL (ya completado por el equipo):
+---------------------------------------------
+- El servidor ya está corriendo en http://localhost:3000
+- El login funciona: GET / redirige a /login sin sesión; tras autenticarse,
+  se carga el dashboard en /.
+- Usuario demo: ana@example.com / password123 (admin + editor)
+- Endpoint único de negocio: POST /api/dispatcher
+  { subsystemId: 1, classId, methodId, params }
+- Sesión real: { UserID, Name, Profile: [{id, name}, ...] }
+- Frontend vanilla HTML/CSS/JS en server/public/
+  - login.html + js/login.js  (solo login)
+  - index.html + js/app.js    (solo panel, sin lógica de login)
+- IDs de operaciones ya verificados en PostgreSQL (subsistema 'Nomina'):
+  * Empleados: listar 1/2, consultar 1/3
+  * Salarios: consultar 2/10
+  * Bonos: listar 3/1, crear 3/32, aprobar 3/33
+  * HorasExtras: listar 4/4, registrar 4/37, aprobar 4/38
+  * Tiempo: registrar 27/45, aprobar 27/46
+  * Prestamos: listar 5/9
+  * Prenomina: calcular 6/7, consultar 6/8
+  * NominaDefinitiva: consultar 7/5, cerrar 7/6
+- Páginas ya funcionales del panel: Dashboard, Empleados, Prenomina
+  (calcular/consultar), Recibo, Horas y Bonos (crear bono y horas extra)
+
+================================================================================
+  LO QUE LUIS DEBE HACER A NIVEL DE FRONTEND
+================================================================================
+
+1. UI DE APROBACIONES (Bonos, Horas Extra, Tiempo Normal)
+---------------------------------------------------------
+- Crear página/vista "Aprobaciones" accesible desde el menú del dashboard.
+- Listar entradas pendientes de aprobación para cada subsistema:
+  * Bonos pendientes (Bonos.listar 3/1, filtrar estado PENDIENTE)
+  * Horas extra pendientes (HorasExtras.listar 4/4, filtrar estado PENDIENTE)
+  * Tiempo normal pendiente (Tiempo - método listar si existe, o consultar)
+- Cada fila debe mostrar: empleado, concepto, monto/horas, motivo/fecha,
+  botón "Aprobar" y (opcional) botón "Rechazar".
+- Al aprobar, llamar al dispatcher:
+  * Bonos.aprobar: { subsystemId:1, classId:3, methodId:33,
+    params: { bonoId, aprobadoPor: session.UserID } }
+  * HorasExtras.aprobar: { subsystemId:1, classId:4, methodId:38,
+    params: { horasExtraId, aprobadoPor: session.UserID } }
+  * Tiempo.aprobar: { subsystemId:1, classId:27, methodId:46,
+    params: { tiempoId, aprobadoPor: session.UserID } }
+- Recargar la lista tras aprobar para que desaparezca la entrada aprobada.
+- Mostrar mensajes de éxito/error claros (toast o alerta inline).
+
+2. DESCUENTOS DE LEY Y OPCIONALES
+---------------------------------
+- Crear página/vista "Descuentos" o integrar en la sección de nómina.
+- Catálogo de conceptos de deducción (consultar payroll_concepts en BD).
+- Formulario para crear/editar deducciones por empleado:
+  * tipo (ley / opcional), concepto, monto, periodo, empleado.
+- Endpoints a usar (verificar IDs reales en BD antes de codificar):
+  * Deducciones de ley y opcionales (registrar/consultar/listar)
+- Mostrar tabla de deducciones activas por empleado con totales.
+- Validar que las deducciones no superen las percepciones (mensaje claro).
+
+3. CRUD DE PRÉSTAMOS Y DEDUCCIONES
+----------------------------------
+- Página "Préstamos" con:
+  * Lista de préstamos por empleado (Prestamos.listar 5/9).
+  * Formulario para registrar nuevo préstamo (monto, tasa, plazo, fecha inicio).
+  * Tabla de cuotas/amortización (loan_installments).
+  * Botón para pagar/abonos a un préstamo.
+- Página "Deducciones" (puede unirse con el punto 2) con CRUD completo:
+  * Crear, editar, desactivar/eliminar deducción opcional.
+  * Asociar deducción a empleado y periodo.
+- Los cambios deben reflejarse al calcular la prenómina (líneas de deducción).
+
+4. PRENÓMINA REPETIBLE Y NÓMINA DEFINITIVA ÚNICA
+-------------------------------------------------
+- Página "Prenómina" ya existe (calcular/consultar). Luis debe:
+  * Asegurar que calcular se pueda ejecutar varias veces en un periodo
+    abierto (repetible) sin duplicar resultados.
+  * Mostrar estado del run (CALCULADA, recalculada, número de run).
+- Página "Nómina Definitiva":
+  * Consultar estado (NominaDefinitiva.consultar 7/5).
+  * Cerrar nómina definitiva (NominaDefinitiva.cerrar 7/6) con confirmación
+    explícita (checkbox "confirmar" + botón "Cerrar nómina").
+  * Una vez cerrada, no se puede recalcular la prenómina de ese periodo.
+  * Mostrar mensaje de éxito tras el cierre.
+
+5. REGLAS DE NEGOCIO FRONTEND A RESPETAR
+-----------------------------------------
+- Prorrateo de salario mensual:
+  * Mensual: ×1
+  * Quincenal: ×0.5
+  * Semanal: ×12/52
+- Flujo de entradas variables: crear → aprobar → calcular.
+  Nada se ve en la prenómina hasta que la entrada esté aprobada.
+- Separar lógica JS del login y del panel para evitar errores por elementos
+  DOM inexistentes (ya hecho: login.js separado de app.js).
+- Todos los IDs de operación deben obtenerse de PostgreSQL, no hardcodear
+  sin verificar primero.
+- Respuesta de login: { success, message, session: { UserID, Name, Profile } }
+- /api/auth/session responde 401 sin sesión.
+
+6. PRUEBAS EN NAVEGADOR
+-----------------------
+- / → /login sin sesión
+- login con ana@example.com / password123 → dashboard
+- Navegación entre páginas del menú sin recargar la página completa
+- Calcular prenómina y ver totales correctos
+- Crear bono/hora extra, aprobarlo, recalcular prenómina y verlo reflejado
+- Cerrar nómina definitiva de un periodo y verificar que ya no se recalcula
+
+================================================================================
+  ARCHIVOS RELEVANTES PARA LUIS
+================================================================================
+- server/public/js/app.js          (lógica del panel, navegación, páginas)
+- server/public/js/api.js          (capa fetch, PayrollApi, IDs de operación)
+- server/public/js/login.js        (solo login, no tocar para panel)
+- server/public/index.html         (markup del panel)
+- server/public/login.html         (markup del login)
+- server/public/css/style.css      (estilos)
+- server/src/dispatcher/registerMethods.js (registro de operaciones y validaciones)
+- database/security.sql            (catálogo de subsistemas/clases/métodos)
+
+================================================================================
+  REGLAS DEL PROYECTO
+================================================================================
+- Commits por partes, SIN push hasta que se acuerde.
+- No copiar/pegar el proyecto de los compañeros; solo inspirarse.
+- Un solo endpoint POST /api/dispatcher con IDs de PostgreSQL.
+- Los commits se hacen únicamente en Express Session (rama main).
+================================================================================
+
+Fin del documento.
