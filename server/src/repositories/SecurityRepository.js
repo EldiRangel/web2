@@ -7,11 +7,6 @@ const {
     validatePermissionValue
 } = require('../security/permissionKeys');
 
-/**
- * Acceso a datos del modelo de seguridad.
- * Todas las consultas usan parametros ($1, $2, ...); nunca se interpola
- * informacion proveniente de la sesion o de la solicitud.
- */
 class SecurityRepository {
     constructor({ db = pool } = {}) {
         this.db = db;
@@ -21,7 +16,7 @@ class SecurityRepository {
         try {
             return await this.db.query(sql, params);
         } catch (error) {
-            // El detalle original queda como `cause` para el log del servidor.
+            
             throw new DatabaseError(error);
         }
     }

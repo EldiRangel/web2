@@ -2,7 +2,7 @@
 // Aplicacion - Sistema de Nomina (Vanilla JS)
 // =========================================
 
-import { Api, PayrollApi } from './api.js';
+import { Api, PayrollApi, initCsrfToken, setAccessToken, getAccessToken } from './api.js';
 
 const STATE = {
     session: null,
@@ -40,6 +40,15 @@ async function checkSession() {
         if (ok && data && data.session) {
             STATE.session = data.session;
             if (topbarUser) topbarUser.textContent = STATE.session.Name || 'Usuario';
+
+            // Intentar obtener un access token JWT via refresh si no hay uno guardado
+            if (!getAccessToken()) {
+                const { ok: refreshed, data: tokenData } = await Api.refreshToken();
+                if (refreshed && tokenData && tokenData.accessToken) {
+                    setAccessToken(tokenData.accessToken);
+                }
+            }
+
             showApp();
         } else {
             window.location.replace('/login');
@@ -682,9 +691,15 @@ window.app = {
     }
 };
 
-if (btnLogout) {
-    btnLogout.addEventListener('click', handleLogout);
-}
+// Inicializar token CSRF y verificar sesion
+initCsrfToken().then(() => {
+    // Verificar sesion al cargar
+    checkSession();
+});
 
-// Verificar sesion al cargar
-checkSession();
+if (btnLogout) {
+    btnLogout.addEventListener('click', async () => {
+        await handleLogout();
+        setAccessToken(null);
+    });
+}

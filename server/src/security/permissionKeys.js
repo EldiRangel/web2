@@ -6,11 +6,6 @@ const ID_PATTERN = /^[1-9]\d*$/;
 const PERMISSION_METHOD_KEY_PATTERN = /^[1-9]\d*(?:_[1-9]\d*){3}$/;
 const PERMISSION_OPTION_KEY_PATTERN = /^[1-9]\d*(?:_[1-9]\d*){2}$/;
 
-/**
- * Normaliza un identificador a entero positivo.
- * Acepta numeros y cadenas numericas, pero nunca booleanos, decimales,
- * negativos, cero ni valores fuera del rango seguro de JavaScript.
- */
 function normalizePositiveInteger(value, field = 'id') {
     if (typeof value === 'string' && ID_PATTERN.test(value.trim())) {
         value = Number(value.trim());

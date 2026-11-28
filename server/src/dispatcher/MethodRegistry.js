@@ -9,14 +9,7 @@ function normalizeName(value, field) {
     return value.trim();
 }
 
-/**
- * Registro interno de operaciones ejecutables.
- *
- * La base de datos aporta los identificadores y nombres de subsistema,
- * clase y metodo; este registro aporta la funcion JavaScript. Una fila de la
- * base de datos no puede introducir codigo: solo se ejecuta una funcion
- * previamente registrada aqui.
- */
+
 class MethodRegistry {
     constructor() {
         this.methods = new Map();

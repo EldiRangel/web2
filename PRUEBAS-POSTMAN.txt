@@ -1,0 +1,805 @@
+PRUEBAS DE SECURITY EN POSTMAN (NAVEGADOR)
+Proyecto: Express Session
+Base URL: http://localhost:3000
+
+======================================================================
+0. ANTES DE EMPEZAR
+======================================================================
+
+1. Abrir una terminal en:
+
+   C:\Users\Eldi\Desktop\Web2\Express Session
+
+2. Iniciar el servidor:
+
+   npm start
+
+   Debe quedar escuchando en http://localhost:3000
+
+3. Si la base de datos es nueva o no tiene los datos demo:
+
+   npm run db:setup
+
+   Si ya probaste antes y la base demo existe, NO hace falta ejecutarlo.
+
+4. Crear en Postman una coleccion llamada:
+
+   Nomina - Security
+
+5. En cada peticion POST:
+
+   - Ir a la pestana Body.
+   - Seleccionar raw.
+   - Seleccionar JSON en el desplegable.
+   - Pegar el body indicado.
+   - Verificar que el header Content-Type sea application/json.
+
+6. Postman guarda las cookies de sesion automaticamente.
+   Se pueden ver en el enlace "Cookies", debajo del boton Send.
+
+7. IMPORTANTE:
+   El login NO cambia de usuario si ya hay una sesion activa.
+   Si intentas entrar como Bruno sin cerrar la sesion de Ana, el servidor
+   responde "Sesion ya activa" y sigues siendo Ana.
+
+   Por eso, antes de cambiar de usuario:
+   - Enviar POST /api/auth/logout, o
+   - Borrar la cookie "sid" desde Cookies.
+
+8. Usar siempre el mismo host:
+   - http://localhost:3000
+   o
+   - http://127.0.0.1:3000
+
+   No mezclarlos, porque las cookies se guardan por dominio.
+
+9. Si usas Postman Web (el del navegador) y localhost no responde:
+   - Instalar Postman Desktop Agent.
+   - Seleccionarlo en la parte inferior derecha de Postman.
+   - Si sigue fallando, usar la aplicacion de escritorio de Postman,
+     que es mas estable para probar localhost y sesiones.
+
+10. MODO SIN BUSINESS (estado actual del proyecto):
+   La carpeta server/src/business no existe todavia. El servidor arranca
+   igualmente y registra las operaciones en modo PENDIENTE.
+
+   Las operaciones autorizadas devuelven 200 con un body parecido a:
+
+   {
+     "success": true,
+     "data": {
+       "pendiente": true,
+       "operacion": "Empleados.listar",
+       "mensaje": "La capa business no esta implementada todavia."
+     }
+   }
+
+   Eso es CORRECTO para esta etapa: sirve para probar login, sesion,
+   permisos, 401, 403, 400 y 404. No devuelve empleados reales ni calcula
+   nomina. Cuando se restaure la capa business, las mismas peticiones
+   ejecutaran la logica real.
+
+======================================================================
+1. USUARIOS Y DATOS DEMO
+======================================================================
+
+Ana:
+  Email:    ana@example.com
+  Password: password123
+  Perfiles: admin + editor
+
+Bruno:
+  Email:    bruno@example.com
+  Password: password123
+  Perfil:   editor
+
+Carla:
+  Email:    carla@example.com
+  Password: password123
+  Perfil:   viewer
+
+IDs actuales de las operaciones:
+
+  Empleados.listar          subsystemId=1  classId=1  methodId=2
+  Empleados.consultar       subsystemId=1  classId=1  methodId=3
+  Prenomina.calcular        subsystemId=1  classId=6  methodId=7
+  NominaDefinitiva.cerrar   subsystemId=1  classId=7  methodId=6
+
+Si la base ya tenia datos, los IDs pueden cambiar. Al final de este archivo
+hay una consulta SQL para verificarlos.
+
+======================================================================
+2. SECUENCIA PRINCIPAL DE PRUEBAS
+======================================================================
+
+----------------------------------------------------------------------
+2.1 LOGIN COMO ANA
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/auth/login
+Body:   raw / JSON
+
+{
+  "userName": "ana@example.com",
+  "password": "password123"
+}
+
+Resultado esperado: 200 OK
+La respuesta debe incluir "success": true y los datos de Ana.
+
+Postman guarda la cookie de sesion.
+
+----------------------------------------------------------------------
+2.2 VERIFICAR QUE ESTAS COMO ANA
+----------------------------------------------------------------------
+
+Metodo: GET
+URL:    http://localhost:3000/api/auth/session
+Body:   none
+
+Resultado esperado: 200 OK
+La respuesta debe mostrar el usuario de Ana.
+
+Esta peticion es importante para no confundir usuarios.
+
+----------------------------------------------------------------------
+2.3 ANA LISTA EMPLEADOS (OPERACION PERMITIDA)
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/dispatcher
+Body:   raw / JSON
+
+{
+  "subsystemId": 1,
+  "classId": 1,
+  "methodId": 2,
+  "params": {
+    "estado": "ACTIVO"
+  }
+}
+
+Resultado esperado: 200 OK
+
+En modo sin business devuelve:
+  "pendiente": true
+  "operacion": "Empleados.listar"
+
+Eso es correcto para comprobar que Ana tiene permiso para Empleados.listar.
+No devuelve empleados reales hasta que exista la capa business.
+
+----------------------------------------------------------------------
+2.4 CERRAR SESION DE ANA
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/auth/logout
+Body:   none
+
+Resultado esperado: 200 OK
+
+Sin este paso, el login de Bruno puede responder "Sesion ya activa"
+y seguirias usando la sesion de Ana.
+
+----------------------------------------------------------------------
+2.5 LOGIN COMO BRUNO
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/auth/login
+Body:   raw / JSON
+
+{
+  "userName": "bruno@example.com",
+  "password": "password123"
+}
+
+Resultado esperado: 200 OK
+
+Luego ejecutar GET /api/auth/session y confirmar que aparece Bruno.
+
+----------------------------------------------------------------------
+2.6 BRUNO LISTA EMPLEADOS (PERMITIDO)
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/dispatcher
+Body:   raw / JSON
+
+{
+  "subsystemId": 1,
+  "classId": 1,
+  "methodId": 2,
+  "params": {}
+}
+
+Resultado esperado: 200 OK
+
+En modo sin business devuelve "pendiente": true con
+"operacion": "Empleados.listar". Eso confirma que Bruno, como editor,
+si tiene permiso para consultar empleados.
+
+----------------------------------------------------------------------
+2.7 BRUNO INTENTA CERRAR NOMINA (DENEGADO)
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/dispatcher
+Body:   raw / JSON
+
+{
+  "subsystemId": 1,
+  "classId": 7,
+  "methodId": 6,
+  "params": {
+    "periodo": "2026-11",
+    "confirmar": true
+  }
+}
+
+Resultado esperado: 403 Forbidden
+
+Mensaje esperado:
+  "No tienes permiso para ejecutar esta operacion."
+
+Esto comprueba que estar autenticado no es lo mismo que estar autorizado.
+
+Usamos 2026-11 para no modificar el periodo demo 2026-10.
+De todas formas, el 403 ocurre antes de ejecutar la operacion.
+
+----------------------------------------------------------------------
+2.8 CERRAR SESION DE BRUNO
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/auth/logout
+Body:   none
+
+Resultado esperado: 200 OK
+
+----------------------------------------------------------------------
+2.9 LOGIN COMO CARLA
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/auth/login
+Body:   raw / JSON
+
+{
+  "userName": "carla@example.com",
+  "password": "password123"
+}
+
+Resultado esperado: 200 OK
+
+Luego ejecutar GET /api/auth/session y confirmar que aparece Carla.
+
+----------------------------------------------------------------------
+2.10 CARLA INTENTA CALCULAR PRENOMINA (DENEGADO)
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/dispatcher
+Body:   raw / JSON
+
+{
+  "subsystemId": 1,
+  "classId": 6,
+  "methodId": 7,
+  "params": {
+    "periodo": "2026-11"
+  }
+}
+
+Resultado esperado: 403 Forbidden
+
+Carla es viewer y no puede calcular prenomina.
+
+----------------------------------------------------------------------
+2.11 CARLA LISTA EMPLEADOS (PERMITIDO)
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/dispatcher
+Body:   raw / JSON
+
+{
+  "subsystemId": 1,
+  "classId": 1,
+  "methodId": 2,
+  "params": {}
+}
+
+Resultado esperado: 200 OK
+
+En modo sin business devuelve "pendiente": true con
+"operacion": "Empleados.listar". Esto demuestra que viewer puede
+consultar, pero no calcular.
+
+----------------------------------------------------------------------
+2.12 CERRAR SESION DE CARLA
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/auth/logout
+Body:   none
+
+Resultado esperado: 200 OK
+
+----------------------------------------------------------------------
+2.13 PROBAR SIN SESION (401)
+----------------------------------------------------------------------
+
+Despues del logout, o borrando la cookie "sid" desde Postman:
+
+Metodo: POST
+URL:    http://localhost:3000/api/dispatcher
+Body:   raw / JSON
+
+{
+  "subsystemId": 1,
+  "classId": 1,
+  "methodId": 2,
+  "params": {}
+}
+
+Resultado esperado: 401 Unauthorized
+
+Esto comprueba que el Dispatcher exige una sesion autenticada.
+
+======================================================================
+3. PRUEBAS DE VALIDACION Y DE IDENTIDAD
+======================================================================
+
+----------------------------------------------------------------------
+3.1 PARAMETROS INVALIDOS (400)
+----------------------------------------------------------------------
+
+Primero iniciar sesion como Ana.
+
+Metodo: POST
+URL:    http://localhost:3000/api/dispatcher
+Body:   raw / JSON
+
+{
+  "subsystemId": 1,
+  "classId": 1,
+  "methodId": 3,
+  "params": {}
+}
+
+Resultado esperado: 400 Bad Request
+
+Empleados.consultar necesita el campo empleadoId.
+El permiso ya paso; lo que falla es la validacion de parametros.
+
+----------------------------------------------------------------------
+3.2 OPERACION INEXISTENTE (404)
+----------------------------------------------------------------------
+
+Con Ana:
+
+Metodo: POST
+URL:    http://localhost:3000/api/dispatcher
+Body:   raw / JSON
+
+{
+  "subsystemId": 1,
+  "classId": 9999,
+  "methodId": 9999,
+  "params": {}
+}
+
+Resultado esperado: 404 Not Found
+
+La operacion no existe o no esta registrada.
+
+----------------------------------------------------------------------
+3.3 INTENTO DE FALSIFICAR LA IDENTIDAD
+----------------------------------------------------------------------
+
+Iniciar sesion como Bruno.
+
+Metodo: POST
+URL:    http://localhost:3000/api/dispatcher
+Body:   raw / JSON
+
+{
+  "subsystemId": 1,
+  "classId": 7,
+  "methodId": 6,
+  "params": {
+    "periodo": "2026-11",
+    "confirmar": true
+  },
+  "userId": 1,
+  "profileId": 1,
+  "allowed": true
+}
+
+Resultado esperado: 403 Forbidden
+
+Aunque el body diga que es el usuario 1 (Ana) y que allowed es true,
+el servidor debe usar la identidad de la cookie de sesion.
+
+======================================================================
+4. PRUEBA CLAVE: REVOCACION DE PERMISO EN CALIENTE
+======================================================================
+
+Esta prueba demuestra que Security consulta PostgreSQL en cada peticion
+y que no basta con tener una sesion abierta o un mapa en memoria.
+
+----------------------------------------------------------------------
+4.1 Preparacion
+----------------------------------------------------------------------
+
+1. Iniciar sesion como Bruno.
+2. Confirmar que Bruno puede listar empleados con Empleados.listar
+   (la peticion 2.6 debe dar 200).
+3. No cerrar sesion.
+4. No reiniciar el servidor.
+
+----------------------------------------------------------------------
+4.2 Comprobar el permiso actual
+----------------------------------------------------------------------
+
+Abrir pgAdmin o psql, conectarse a la misma base del proyecto y ejecutar:
+
+SELECT pm.allowed
+FROM permission_method pm
+JOIN profiles p ON p.id = pm.profile_id
+WHERE p.name = 'editor'
+  AND pm.subsystem_id = 1
+  AND pm.class_id = 1
+  AND pm.method_id = 2;
+
+Resultado esperado: true
+
+----------------------------------------------------------------------
+4.3 Revocar Empleados.listar al perfil editor
+----------------------------------------------------------------------
+
+Ejecutar:
+
+UPDATE permission_method
+SET allowed = FALSE,
+    updated_at = NOW()
+WHERE subsystem_id = 1
+  AND class_id = 1
+  AND method_id = 2
+  AND profile_id = (
+      SELECT id
+      FROM profiles
+      WHERE name = 'editor'
+  );
+
+Verificar otra vez con el SELECT de 4.2.
+Ahora debe devolver false.
+
+----------------------------------------------------------------------
+4.4 Repetir la peticion de Bruno SIN volver a hacer login
+----------------------------------------------------------------------
+
+Metodo: POST
+URL:    http://localhost:3000/api/dispatcher
+Body:   raw / JSON
+
+{
+  "subsystemId": 1,
+  "classId": 1,
+  "methodId": 2,
+  "params": {}
+}
+
+Resultado esperado: 403 Forbidden
+
+Debe pasar de 200 a 403 sin reiniciar el servidor y sin cerrar sesion.
+
+----------------------------------------------------------------------
+4.5 Probar con Ana y comprobar la denegacion prevalente
+----------------------------------------------------------------------
+
+Sin cerrar la sesion de Bruno, iniciar sesion como Ana no es posible
+si no se cierra la sesion. Para esta prueba:
+
+1. Cerrar la sesion de Bruno.
+2. Iniciar sesion como Ana.
+3. Enviar la misma peticion de Empleados.listar.
+
+Resultado esperado: 403 Forbidden
+
+Ana tiene admin y editor. El permiso admin sigue en true, pero el permiso
+editor ahora esta en false. La denegacion explicita prevalece.
+
+----------------------------------------------------------------------
+4.6 Restaurar el permiso
+----------------------------------------------------------------------
+
+Ejecutar:
+
+UPDATE permission_method
+SET allowed = TRUE,
+    updated_at = NOW()
+WHERE subsystem_id = 1
+  AND class_id = 1
+  AND method_id = 2
+  AND profile_id = (
+      SELECT id
+      FROM profiles
+      WHERE name = 'editor'
+  );
+
+Verificar con el SELECT de 4.2: debe volver a true.
+
+Enviar otra vez la peticion de Empleados.listar con Ana o Bruno.
+Resultado esperado: 200 OK.
+
+======================================================================
+5. PRUEBAS OPCIONALES DE ESTADO
+======================================================================
+
+Estas pruebas tambien deben restaurarse al terminar.
+No las ejecutes si no quieres modificar temporalmente los usuarios demo.
+
+----------------------------------------------------------------------
+5.1 Usuario inactivo
+----------------------------------------------------------------------
+
+Desactivar a Bruno:
+
+UPDATE users
+SET active = FALSE
+WHERE email = 'bruno@example.com';
+
+Con la sesion de Bruno ya iniciada, enviar Empleados.listar:
+
+{
+  "subsystemId": 1,
+  "classId": 1,
+  "methodId": 2,
+  "params": {}
+}
+
+Resultado esperado: 403 Forbidden
+Mensaje relacionado con usuario inactivo.
+
+Restaurar:
+
+UPDATE users
+SET active = TRUE
+WHERE email = 'bruno@example.com';
+
+----------------------------------------------------------------------
+5.2 Persona inactiva
+----------------------------------------------------------------------
+
+Desactivar la persona asociada a Bruno:
+
+UPDATE person p
+SET active = FALSE
+FROM users u
+WHERE u.person_id = p.id
+  AND u.email = 'bruno@example.com';
+
+Con la sesion de Bruno, enviar Empleados.listar.
+Resultado esperado: 403 Forbidden
+
+Restaurar:
+
+UPDATE person p
+SET active = TRUE
+FROM users u
+WHERE u.person_id = p.id
+  AND u.email = 'bruno@example.com';
+
+----------------------------------------------------------------------
+5.3 Asignacion de perfil inactiva
+----------------------------------------------------------------------
+
+Desactivar la asignacion de perfil de Bruno:
+
+UPDATE user_profiles up
+SET active = FALSE
+FROM users u
+WHERE up.user_id = u.id
+  AND u.email = 'bruno@example.com';
+
+Con la sesion de Bruno, enviar Empleados.listar.
+Resultado esperado: 403 Forbidden
+Mensaje relacionado con falta de perfiles activos.
+
+Restaurar:
+
+UPDATE user_profiles up
+SET active = TRUE
+FROM users u
+WHERE up.user_id = u.id
+  AND u.email = 'bruno@example.com';
+
+----------------------------------------------------------------------
+5.4 Metodo inactivo
+----------------------------------------------------------------------
+
+Desactivar Empleados.listar:
+
+UPDATE method m
+SET active = FALSE
+FROM "class" c
+WHERE m.class_id = c.id
+  AND c.name = 'Empleados'
+  AND m.name = 'listar';
+
+Con Ana, enviar Empleados.listar.
+Resultado esperado: 403 Forbidden
+Mensaje relacionado con operacion inactiva.
+
+Restaurar:
+
+UPDATE method m
+SET active = TRUE
+FROM "class" c
+WHERE m.class_id = c.id
+  AND c.name = 'Empleados'
+  AND m.name = 'listar';
+
+======================================================================
+6. CONSULTAS SQL DE APOYO
+======================================================================
+
+----------------------------------------------------------------------
+6.1 Ver usuarios y perfiles
+----------------------------------------------------------------------
+
+SELECT u.email,
+       p.name AS perfil,
+       up.active AS asignacion_activa,
+       u.active AS usuario_activo,
+       pe.active AS persona_activa
+FROM users u
+JOIN user_profiles up ON up.user_id = u.id
+JOIN profiles p ON p.id = up.profile_id
+LEFT JOIN person pe ON pe.id = u.person_id
+ORDER BY u.email, p.name;
+
+Esperado:
+  ana@example.com    admin
+  ana@example.com    editor
+  bruno@example.com  editor
+  carla@example.com  viewer
+
+----------------------------------------------------------------------
+6.2 Ver IDs reales de las operaciones
+----------------------------------------------------------------------
+
+SELECT s.id AS subsystem_id,
+       c.id AS class_id,
+       m.id AS method_id,
+       c.name AS clase,
+       m.name AS metodo
+FROM subsystem s
+JOIN "class" c ON c.subsystem_id = s.id
+JOIN method m ON m.class_id = c.id
+WHERE s.name = 'Nomina'
+ORDER BY c.name, m.name;
+
+Usar estos IDs en las peticiones si son distintos de los indicados arriba.
+
+----------------------------------------------------------------------
+6.3 Ver la matriz de permisos
+----------------------------------------------------------------------
+
+SELECT p.name AS perfil,
+       s.name AS subsistema,
+       c.name AS clase,
+       m.name AS metodo,
+       pm.allowed
+FROM permission_method pm
+JOIN profiles p ON p.id = pm.profile_id
+JOIN subsystem s ON s.id = pm.subsystem_id
+JOIN "class" c ON c.id = pm.class_id
+              AND c.subsystem_id = pm.subsystem_id
+JOIN method m ON m.id = pm.method_id
+             AND m.class_id = pm.class_id
+WHERE s.name = 'Nomina'
+ORDER BY p.name, c.name, m.name;
+
+Permisos demo esperados:
+  admin  -> todas las operaciones en true
+  editor -> consultas, empleados, salarios, bonos, horas extras,
+            prestamos, calcular/consultar prenomina; NO cerrar nomina
+  viewer -> Empleados.listar, Empleados.consultar,
+            Salarios.consultar, Prenomina.consultar,
+            NominaDefinitiva.consultar
+
+======================================================================
+7. RESULTADOS ESPERADOS
+======================================================================
+
+Prueba                                      Codigo esperado
+----------------------------------------------------------------------
+Sin sesion                                  401
+Login correcto                              200
+Login incorrecto                            401
+Ana lista empleados                         200
+Bruno cierra nomina                         403
+Carla calcula prenomina                     403
+Carla lista empleados                       200
+Empleados.consultar sin empleadoId          400
+Operacion inexistente                       404
+Bruno falsifica userId/profileId            403
+Revocar permiso a editor y repetir          403
+Restaurar permiso y repetir                 200
+Usuario inactivo                            403
+Persona inactiva                            403
+Perfil inactivo                             403
+Metodo inactivo                             403
+
+======================================================================
+8. PROBLEMAS COMUNES
+======================================================================
+
+1. "Sesion ya activa"
+   No cerraste la sesion del usuario anterior.
+   Enviar POST /api/auth/logout y volver a hacer login.
+
+2. Esperabas 403 y recibiste 200
+   Probablemente no estas logueado con el usuario correcto.
+   Ejecutar GET /api/auth/session.
+
+3. Recibes 404
+   Los subsystemId, classId o methodId no son los correctos.
+   Ejecutar la consulta 6.2.
+
+4. Recibes 401 al hacer login
+   Revisar email y password.
+   Revisar que el seed se haya ejecutado.
+
+5. Postman Web no conecta con localhost
+   Instalar y seleccionar Postman Desktop Agent.
+   O usar la aplicacion de escritorio de Postman.
+
+6. Error de CORS en Postman Web
+   Usar Desktop Agent o la aplicacion de escritorio.
+
+7. Las cookies no se guardan
+   Verificar que siempre usas el mismo host y puerto.
+   No mezclar localhost con 127.0.0.1.
+
+8. El servidor no responde
+   Verificar que npm start sigue ejecutandose.
+   Verificar que el puerto sea 3000.
+
+9. Error 500
+   Revisar la consola donde corre npm start.
+   El cliente no debe recibir el detalle interno del error.
+
+10. Recibes 200 con "pendiente": true
+   Es el modo sin business. El permiso y la sesion funcionaron, pero la
+   logica de nomina todavia no esta instalada. Es lo esperado en esta etapa.
+
+======================================================================
+9. CHECKLIST FINAL
+======================================================================
+
+[ ] El servidor esta corriendo en http://localhost:3000
+[ ] Ana puede hacer login
+[ ] Ana puede listar empleados (200 con "pendiente": true)
+[ ] Ana puede consultar su sesion
+[ ] El logout funciona
+[ ] Bruno puede hacer login
+[ ] Bruno puede listar empleados (200)
+[ ] Bruno NO puede cerrar nomina (403)
+[ ] Carla puede hacer login
+[ ] Carla NO puede calcular prenomina (403)
+[ ] Carla SI puede listar empleados (200)
+[ ] Sin sesion, el Dispatcher da 401
+[ ] Empleados.consultar sin empleadoId da 400
+[ ] Una operacion inexistente da 404
+[ ] El body no puede falsificar userId/profileId/allowed
+[ ] Revocar el permiso a editor hace que Bruno reciba 403
+[ ] La denegacion de editor prevalece sobre el permiso de admin de Ana
+[ ] Restaurar el permiso devuelve 200
+[ ] Se restauraron todos los datos modificados
+
+FIN DEL ARCHIVO

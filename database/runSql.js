@@ -25,7 +25,7 @@ const sql = fs.readFileSync(sqlPath, 'utf8');
         try {
             await client.query('ROLLBACK');
         } catch (rollbackError) {
-            // La transaccion pudo no haber iniciado.
+          
         }
         console.error(`Error al ejecutar ${requestedFile}:`, error.message);
         process.exitCode = 1;

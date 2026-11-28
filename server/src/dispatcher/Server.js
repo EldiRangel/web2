@@ -4,19 +4,12 @@ const express = require('express');
 const { AppError } = require('../errors/AppError');
 const defaultAuthMiddleware = require('../middleware/authMiddleware');
 
-/**
- * Dispatcher unico de operaciones de negocio.
- *
- * El cuerpo solo aporta subsystemId, classId, methodId y params. La identidad
- * se construye en authMiddleware a partir de req.session; el cliente no puede
- * enviar un usuario o perfil confiable.
- */
 function createDispatcherRouter({
     security,
     authMiddleware = defaultAuthMiddleware
 } = {}) {
     if (!security || typeof security.execMethod !== 'function') {
-        throw new Error('El Dispatcher requiere una instancia de Security valida.');
+        throw new Error('El Dispatcher requiere una instancia valida.');
     }
 
     const router = express.Router();
@@ -41,7 +34,7 @@ function sendError(res, error) {
     const status = isAppError ? error.status : 500;
 
     if (status >= 500) {
-        // El detalle (SQL, stack, credenciales) queda solo en el servidor.
+       
         console.error('[Dispatcher] Error interno:', error);
         return res.status(500).json({
             success: false,

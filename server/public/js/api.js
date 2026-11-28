@@ -4,22 +4,105 @@
 
 const BASE = '/api';
 
-async function request(path, options = {}) {
+// Almacen en memoria del access token (se establece tras login exitoso)
+let accessToken = null;
+let csrfToken = null;
+
+export function setAccessToken(token) {
+    accessToken = token;
+}
+
+export function getAccessToken() {
+    return accessToken;
+}
+
+export function setCsrfToken(token) {
+    csrfToken = token;
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) meta.content = token;
+}
+
+export async function initCsrfToken() {
+    try {
+        const { ok, data } = await request('');
+        if (ok && data && data.csrfToken) {
+            setCsrfToken(data.csrfToken);
+        }
+    } catch (error) {
+        // No hay sesion o no hay csrf; se obtendra tras el login
+    }
+}
+
+async function refreshAccessToken() {
+    try {
+        const { ok, data } = await request('/auth/refresh', {
+            method: 'POST',
+            _noAuth: true // no enviar access token (no hay uno valido)
+        });
+        if (ok && data && data.accessToken) {
+            setAccessToken(data.accessToken);
+            return true;
+        }
+        return false;
+    } catch (error) {
+        return false;
+    }
+}
+
+async function request(path, options = {}, _retry = false) {
+    // No enviar access token en la peticion de refresh
+    const skipAuth = options._noAuth || path === '/auth/refresh';
+    delete options._noAuth;
+
+    const headers = {
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+    };
+
+    // Enviar access token JWT si existe (para /api/dispatcher y rutas protegidas)
+    if (!skipAuth && accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
+    // Enviar token CSRF para metodos que cambian estado
+    if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method)) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        if (csrfToken) {
+            headers['X-CSRF-Token'] = csrfToken;
+        }
+    }
+
     const response = await fetch(BASE + path, {
         method: options.method || 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
+        headers,
+        credentials: 'same-origin', // envia cookies (refresh_token HttpOnly)
         body: options.body ? JSON.stringify(options.body) : undefined
     });
 
     let data = null;
+    let headersOut = {};
     try {
         data = await response.json();
+        headersOut = Object.fromEntries(response.headers.entries());
     } catch (error) {
-        // No hay JSON en la respuesta
+        headersOut = Object.fromEntries(response.headers.entries());
     }
 
-    return { ok: response.ok, status: response.status, data };
+    // Si recibimos 401 y no es el endpoint de refresh, intentar renovar el token
+    if (response.status === 401 && !_retry && !skipAuth) {
+        const refreshed = await refreshAccessToken();
+        if (refreshed) {
+            // Reintentar la peticion con el nuevo token
+            return request(path, options, true);
+        }
+        // Si no se pudo renovar, limpiar token y redirigir a login
+        setAccessToken(null);
+        if (window.location.pathname !== '/login') {
+            window.location.replace('/login');
+        }
+    }
+
+    return { ok: response.ok, status: response.status, data, headers: headersOut };
 }
 
 export const Api = {
@@ -35,6 +118,27 @@ export const Api = {
     },
     logout() {
         return request('/auth/logout', { method: 'POST' });
+    },
+    refreshToken() {
+        return request('/auth/refresh', { method: 'POST' });
+    },
+    recoverPassword(email) {
+        return request('/auth/recover', {
+            method: 'POST',
+            body: { email }
+        });
+    },
+    verifyRecovery(token) {
+        return request('/auth/verify', {
+            method: 'POST',
+            body: { token }
+        });
+    },
+    resetPassword(token, password) {
+        return request('/auth/reset', {
+            method: 'POST',
+            body: { token, password }
+        });
     },
 
     // Dispatcher - operaciones de nomina
@@ -85,7 +189,7 @@ export const PayrollApi = {
     },
     createOvertime({ empleadoId, periodo, fecha, horas, tarifaHora, factor, conceptoId, creadoPor }) {
         return Api.dispatch(operation(4, 37, {
-            empleadoId, periodo, fecha, horas, tarifaHora, factor, conceptoId, creadoPor
+            empleadoId, periodo, fecha, horas, tarifaHora: tarifa, factor, conceptoId, creadoPor
         }));
     },
 

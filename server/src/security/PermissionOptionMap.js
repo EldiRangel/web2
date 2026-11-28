@@ -8,10 +8,6 @@ const {
     validatePermissionValue
 } = require('./permissionKeys');
 
-/**
- * Mapa de permisos de opciones.
- * La clave tiene el formato subsystemId_optionId_profileId.
- */
 class PermissionOptionMap extends Map {
     add(key, value) {
         const normalizedKey = normalizePermissionOptionKey(key);

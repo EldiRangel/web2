@@ -2,7 +2,7 @@
 // Login - Sistema de Nomina (Vanilla JS)
 // =========================================
 
-import { Api } from './api.js';
+import { Api, setAccessToken, setCsrfToken, initCsrfToken } from './api.js';
 
 // Elementos DOM (solo existen en login.html)
 const loginForm = document.getElementById('login-form');
@@ -33,7 +33,7 @@ async function handleLogin(event) {
     loginError.style.display = 'none';
 
     if (!userName || !password) {
-        loginError.textContent = 'Correo y contraseña son obligatorios';
+        loginError.textContent = 'Correo y contrasena son obligatorios';
         loginError.style.display = 'block';
         return;
     }
@@ -42,12 +42,27 @@ async function handleLogin(event) {
     loginBtn.textContent = 'Ingresando...';
 
     try {
-        const { ok, data } = await Api.login(userName, password);
+        const { ok, status, data, headers } = await Api.login(userName, password);
+
+        // Capturar CSRF token de la respuesta del servidor
+        const csrfHeader = headers['x-csrf-token'];
+        if (csrfHeader) {
+            setCsrfToken(csrfHeader);
+        }
 
         if (!ok || !data || !data.success) {
-            loginError.textContent = (data && data.message) || 'No se pudo iniciar sesion';
+            if (status === 429) {
+                loginError.textContent = 'Demasiados intentos. Intenta de nuevo en un minuto.';
+            } else {
+                loginError.textContent = (data && data.message) || 'No se pudo iniciar sesion';
+            }
             loginError.style.display = 'block';
             return;
+        }
+
+        // Guardar access token JWT si viene en la respuesta
+        if (data.accessToken) {
+            setAccessToken(data.accessToken);
         }
 
         // Sesion establecida: ir al panel
@@ -64,6 +79,8 @@ async function handleLogin(event) {
 
 // Inicializacion
 if (loginForm) {
+    // Obtener CSRF token inicial del servidor
+    initCsrfToken();
     loginForm.addEventListener('submit', handleLogin);
 }
 

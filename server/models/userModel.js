@@ -104,6 +104,137 @@ const userModel = {
              DO UPDATE SET active = TRUE`,
             [userId, profileNames]
         );
+    },
+
+    // ------------------------------------------------------------------
+    // Refresh tokens JWT
+    // ------------------------------------------------------------------
+    async saveRefreshToken(userId, token, expiresAt) {
+        await pool.query(
+            `INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)`,
+            [userId, token, expiresAt]
+        );
+    },
+
+    async findRefreshToken(token) {
+        const result = await pool.query(
+            `SELECT id, user_id, token, expires_at, revoked FROM refresh_tokens WHERE token = $1`,
+            [token]
+        );
+        return result.rows[0] || null;
+    },
+
+    async revokeRefreshToken(token) {
+        await pool.query(
+            `UPDATE refresh_tokens SET revoked = TRUE WHERE token = $1`,
+            [token]
+        );
+    },
+
+    async revokeAllRefreshTokens(userId) {
+        await pool.query(
+            `UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 AND revoked = FALSE`,
+            [userId]
+        );
+    },
+
+    // ------------------------------------------------------------------
+    // Recuperacion de contrasena
+    // ------------------------------------------------------------------
+    async savePasswordRecovery(userId, token, expiresAt) {
+        await pool.query(
+            `INSERT INTO password_recovery (user_id, token, expires_at) VALUES ($1, $2, $3)`,
+            [userId, token, expiresAt]
+        );
+    },
+
+    async verifyPasswordRecovery(token) {
+        const result = await pool.query(
+            `SELECT id, user_id, expires_at, used FROM password_recovery WHERE token = $1`,
+            [token]
+        );
+        return result.rows[0] || null;
+    },
+
+    async resetPasswordWithToken(token, passwordHash) {
+        const result = await pool.query(
+            `SELECT id, user_id, expires_at, used FROM password_recovery WHERE token = $1`,
+            [token]
+        );
+        const row = result.rows[0];
+        if (!row || row.used) return null;
+        if (new Date(row.expires_at) < new Date()) return null;
+
+        await pool.query('BEGIN');
+        try {
+            await pool.query(
+                `UPDATE users SET password = $1 WHERE id = $2`,
+                [passwordHash, row.user_id]
+            );
+            await pool.query(
+                `UPDATE password_recovery SET used = TRUE WHERE id = $1`,
+                [row.id]
+            );
+            await pool.query('COMMIT');
+        } catch (err) {
+            await pool.query('ROLLBACK');
+            throw err;
+        }
+
+        return row.user_id;
+    },
+
+    // ------------------------------------------------------------------
+    // Intento de login (bloqueo por fuerza bruta)
+    // ------------------------------------------------------------------
+    async recordLoginAttempt(email, ip, success) {
+        try {
+            await pool.query(
+                `INSERT INTO login_attempts (email, ip, success) VALUES ($1, $2, $3)`,
+                [email, ip, success]
+            );
+        } catch (err) {
+            console.error('[userModel.recordLoginAttempt]', err);
+        }
+    },
+
+    async incrementFailedAttempts(userId) {
+        const row = await pool.query(
+            `SELECT failed_login_attempts FROM users WHERE id = $1`,
+            [userId]
+        );
+        const current = row.rows[0] ? row.rows[0].failed_login_attempts : 0;
+        const next = current + 1;
+
+        if (next >= 5) {
+            const lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+            await pool.query(
+                `UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3`,
+                [next, lockedUntil, userId]
+            );
+        } else {
+            await pool.query(
+                `UPDATE users SET failed_login_attempts = $1 WHERE id = $2`,
+                [next, userId]
+            );
+        }
+    },
+
+    async resetFailedAttempts(userId) {
+        await pool.query(
+            `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1`,
+            [userId]
+        );
+    },
+
+    async isUserLocked(userId) {
+        const row = await pool.query(
+            `SELECT locked_until FROM users WHERE id = $1`,
+            [userId]
+        );
+        if (!row.rows[0]) return false;
+        const lockedUntil = row.rows[0].locked_until;
+        return lockedUntil && new Date(lockedUntil) > new Date();
     }
 };
 

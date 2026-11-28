@@ -7,6 +7,11 @@ Tambien se implemento en PostgreSQL el modelo de datos de nomina del diagrama
 (`PAY_PERIODS`, `PAYROLL_RUNS`, `EMPLOYEES`, etc.) y las operaciones de nomina
 ahora persisten y consultan datos reales.
 
+El frontend fue migrado de Web Components a React con Vite. Express, Express
+Session, PostgreSQL, `Security` y el Dispatcher conservan el mismo contrato y
+las mismas rutas de API. La carpeta `client/` se conserva como referencia, pero
+ya no se sirve.
+
 El login anterior sigue usando las mismas rutas y el mismo objeto de sesion:
 
 ```js
@@ -196,6 +201,7 @@ npm install
 npm run db:security
 npm run db:payroll
 npm test
+npm run build
 npm start
 ```
 
@@ -214,6 +220,7 @@ existente. Debe ejecutarse despues de `db:security`, porque usa `person` y
 npm install
 npm run db:setup
 npm test
+npm run build
 npm start
 ```
 
@@ -222,6 +229,76 @@ npm start
 
 No ejecutes `npm run seed` sobre datos reales: el seed restablece las contrasenas
 de los usuarios demo.
+
+## Frontend React
+
+El frontend vive en `frontend/` y reutiliza los estilos y el diseno del cliente
+anterior. La carpeta `client/` queda como respaldo y ya no se sirve.
+
+```text
+frontend/
+  index.html
+  vite.config.mjs
+  public/images/
+  src/
+    main.jsx
+    App.jsx
+    api/api.js
+    components/
+      Nav.jsx
+      Panel.jsx
+      ThemeSwitcher.jsx
+    config/menu.js
+    pages/
+      LoginPage.jsx
+      HomePage.jsx
+    styles/
+```
+
+### Desarrollo
+
+```bash
+npm run dev
+```
+
+`server/dev.js` inicia Express con Vite en modo middleware. Todo se sirve en
+`http://localhost:3000`, de modo que la cookie `sid` y `/api` comparten origen.
+Los cambios de React se recargan con Vite.
+
+### Produccion
+
+```bash
+npm run build
+npm run start:prod
+```
+
+`npm run build` genera `frontend/dist`. `npm run start:prod` activa
+`NODE_ENV=production` y sirve el build; si falta, el arranque falla con un
+mensaje claro. En produccion la cookie conserva `secure`, por lo que el sitio
+debe publicarse por HTTPS.
+
+Para uso local, `npm start` sirve el build si existe y usa Vite si no. No fuerza
+las cookies `secure`, asi que el login funciona sobre `http://localhost`.
+
+### Previsualizar el build localmente
+
+```bash
+npm run preview
+```
+
+Compila y sirve `frontend/dist` con cookies no `secure`, para probar el build en
+`http://localhost:3000` sin HTTPS.
+
+### Rutas y sesion
+
+| Ruta | Comportamiento |
+|---|---|
+| `/` | Express exige sesion; React muestra el panel. Sin sesion redirige a `/login`. |
+| `/login` | Express solo la entrega sin sesion; React valida de nuevo contra `/api/auth/session`. |
+
+El frontend no guarda usuarios ni permisos en `localStorage`. La identidad sale
+de la cookie `sid` HttpOnly y de `/api/auth/session`. El login y el logout usan
+los mismos endpoints de siempre.
 
 ## Login existente
 
@@ -390,8 +467,13 @@ curl -i -b cookies.txt \
 npm test
 ```
 
-Se ejecutan 36 pruebas con `node:test` y datos controlados, sin depender de
-datos personales reales. Cubren, entre otros:
+El runner ejecuta las pruebas de seguridad y Dispatcher. Si existe
+`server/src/business/PayrollCalculator.js`, agrega automaticamente las pruebas
+de calculo de nomina. Mientras la capa business no este instalada se ejecutan
+29 pruebas y se omite la suite de calculo.
+
+Las pruebas usan `node:test` y datos controlados, sin depender de datos
+personales reales. Cubren, entre otros:
 
 - lectura de ambos mapas y deteccion de claves duplicadas/invalidas;
 - denegacion por defecto y concesion explicita;
@@ -410,6 +492,13 @@ datos personales reales. Cubren, entre otros:
   lineas sin concepto.
 
 ## Persistencia y demo de nomina
+
+> **Modo sin business:** si no existe la carpeta `server/src/business`, el
+> servidor arranca igualmente y registra las operaciones en modo `PENDIENTE`.
+> Las operaciones autorizadas responden `200` con
+> `{ "pendiente": true, "operacion": "..." }`. Esto permite probar login,
+> sesion, permisos y validaciones, pero no consulta ni modifica datos reales
+> de nomina. Al restaurar la capa business, el registro real se activa solo.
 
 Las operaciones de nomina ya no usan un almacen en memoria. El flujo es:
 
@@ -473,12 +562,30 @@ database/runSql.js
 tests/Security.test.js
 tests/Dispatcher.test.js
 tests/PayrollCalculator.test.js
+server/frontend.js
+server/dev.js
+server/start.js
+server/preview.js
+nodemon.json
+frontend/index.html
+frontend/vite.config.mjs
+frontend/src/main.jsx
+frontend/src/App.jsx
+frontend/src/api/api.js
+frontend/src/config/menu.js
+frontend/src/components/Nav.jsx
+frontend/src/components/Panel.jsx
+frontend/src/components/ThemeSwitcher.jsx
+frontend/src/pages/LoginPage.jsx
+frontend/src/pages/HomePage.jsx
+frontend/src/styles/
 ```
 
 ## Archivos modificados
 
 ```text
 server/app.js
+server/routes/pageRoutes.js
 server/models/userModel.js
 server/services/Session.js
 server/config/session.js
@@ -487,13 +594,17 @@ server/middleware/errorHandler.js
 database/schema.sql
 database/seed.js
 package.json
+package-lock.json
+.gitignore
 README.md
 ```
 
 ## Notas de seguridad
 
 - Consultas SQL parametrizadas; no se interpola entrada del cliente.
-- No se usa `eval`, `Function`, `import()` dinamico ni invocacion por nombre.
+- No se usa `eval`, `Function` ni invocacion por nombre en el codigo de negocio
+  ni en la autorizacion. El unico `import()` dinamico esta en el arranque de
+  Vite para desarrollo y no participa en `Security`.
 - Solo se ejecutan funciones registradas en `MethodRegistry`.
 - La identidad sale de `req.session`; los perfiles y permisos salen de PostgreSQL.
 - No se almacenan permisos en la sesion ni en el cliente.

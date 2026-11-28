@@ -1165,113 +1165,178 @@ class PayrollRepository {
         return result.rows.map(row => ({
             employeeId: row.employee_id,
             hours: toNumber(row.total_hours),
-            hourlyRate: toNumber(row.hourly_rate)
+            hourlyRate: toNumber(row.hourlyRate)
         }));
     }
 
-    async createBonus({ employeeId, periodId, conceptId, amount, reason, createdBy }) {
-        return this._withTransaction(async client => {
-            const result = await client.query(
-                `INSERT INTO bonus_entries
-                     (employee_id, concept_id, period_id, amount, reason, status, created_by)
-                 VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6::int)
-                 RETURNING id, employee_id, concept_id, period_id, amount, reason, status, created_at`,
-                [employeeId, conceptId, periodId, amount, reason, createdBy]
-            );
-            return result.rows[0];
-        });
+    // ------------------------------------------------------------------
+    // Conceptos de nomina (Bloque 3: nomina venezolana)
+    // ------------------------------------------------------------------
+    async listConcepts({ categoria = null, tipo = null, active = true } = {}) {
+        const conditions = [];
+        const params = [];
+
+        if (active !== null && active !== undefined) {
+            params.push(active);
+            conditions.push(`c.active = $${params.length}`);
+        }
+        if (categoria) {
+            params.push(categoria);
+            conditions.push(`c.categoria = $${params.length}`);
+        }
+        if (tipo) {
+            params.push(tipo);
+            conditions.push(`c.tipo = $${params.length}`);
+        }
+
+        const where = conditions.length > 0
+            ? `WHERE ${conditions.join(' AND ')}`
+            : '';
+
+        const result = await this._query(
+            `SELECT id, codigo, nombre, tipo, categoria, unidad, calculo,
+                    porcentaje, tope_base, piso_base, active
+             FROM concepto c
+             ${where}
+             ORDER BY c.codigo`,
+            params
+        );
+
+        return result.rows.map(row => ({
+            id: row.id,
+            codigo: row.codigo,
+            nombre: row.nombre,
+            tipo: row.tipo,
+            categoria: row.categoria,
+            unidad: row.unidad,
+            calculo: row.calculo,
+            porcentaje: toNumber(row.porcentaje),
+            topeBase: toNumber(row.tope_base),
+            pisoBase: toNumber(row.piso_base),
+            active: row.active
+        }));
     }
 
-    async createOvertime({ employeeId, periodId, conceptId, workDate, hours, rateMultiplier, hourlyRate, amount, createdBy }) {
-        return this._withTransaction(async client => {
-            const result = await client.query(
-                `INSERT INTO overtime_entries
-                     (employee_id, concept_id, period_id, work_date, hours, rate_multiplier,
-                      hourly_rate, amount, status, created_by)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDIENTE', $9::int)
-                 RETURNING id`,
-                [employeeId, conceptId, periodId, workDate, hours, rateMultiplier, hourlyRate, amount, createdBy]
-            );
-            return result.rows[0];
-        });
+    async getConceptByCode(codigo) {
+        const result = await this._query(
+            `SELECT id, codigo, nombre, tipo, categoria, unidad, calculo,
+                    porcentaje, tope_base, piso_base, active
+             FROM concepto
+             WHERE codigo = $1
+             LIMIT 1`,
+            [codigo]
+        );
+        return result.rows[0] || null;
     }
 
-    async createTimeEntry({ employeeId, workDate, hours, hourlyRate, notes, createdBy }) {
-        return this._withTransaction(async client => {
-            const result = await client.query(
-                `INSERT INTO time_entries
-                     (employee_id, work_date, hours, hourly_rate, notes, status, created_by)
-                 VALUES ($1, $2, $3, $4, $5, 'PENDIENTE', $6::int)
-                 RETURNING id`,
-                [employeeId, workDate, hours, hourlyRate, notes, createdBy]
-            );
-            return result.rows[0];
-        });
+    async listAportesLey({ active = true } = {}) {
+        const result = await this._query(
+            `SELECT tal.id, tal.concepto_id, c.codigo, c.nombre, tal.nombre AS aporte_nombre,
+                    tal.porcentaje, tal.tope_salario, tal.active
+             FROM tipo_aporte_ley tal
+             INNER JOIN concepto c ON c.id = tal.concepto_id
+             WHERE tal.active = $1
+             ORDER BY c.codigo`,
+            [active]
+        );
+
+        return result.rows.map(row => ({
+            id: row.id,
+            conceptoId: row.concepto_id,
+            codigo: row.codigo,
+            nombre: row.aporte_nombre || row.nombre,
+            conceptoNombre: row.nombre,
+            porcentaje: toNumber(row.porcentaje),
+            topeSalario: toNumber(row.tope_salario),
+            active: row.active
+        }));
     }
 
-    async approveBonus(bonusId, approvedBy) {
-        return this._withTransaction(async client => {
-            const result = await client.query(
-                `UPDATE bonus_entries
-                 SET status = 'APROBADO',
-                     approved_by = $2::int,
-                     applied_at = CURRENT_TIMESTAMP
-                 WHERE id = $1
-                   AND status = 'PENDIENTE'
-                 RETURNING id, status`,
-                [bonusId, approvedBy]
-            );
-            if (result.rows.length === 0) {
-                throw new NotFoundError(
-                    'Bono no encontrado o ya fue aprobado/cancelado.'
-                );
-            }
-            return result.rows[0];
-        });
+    // ------------------------------------------------------------------
+    // Despidos (Bloque 4: prorrateo por dias)
+    // ------------------------------------------------------------------
+    async listDespidos({ employeeId = null, periodo = null } = {}) {
+        const conditions = [];
+        const params = [];
+
+        if (employeeId) {
+            params.push(employeeId);
+            conditions.push(`d.employee_id = $${params.length}`);
+        }
+        if (periodo) {
+            params.push(periodo);
+            conditions.push(`pp.code = $${params.length}`);
+        }
+
+        const where = conditions.length > 0
+            ? `WHERE ${conditions.join(' AND ')}`
+            : '';
+
+        const result = await this._query(
+            `SELECT d.id, d.employee_id, e.employee_code, p.name AS employee_name,
+                    d.fecha_efecto, d.motivo, d.tipo_contrato, d.liquidacion_pagada,
+                    pp.code AS periodo_code
+             FROM despido d
+             INNER JOIN employees e ON e.id = d.employee_id
+             INNER JOIN person p ON p.id = e.person_id
+             LEFT JOIN pay_periods pp
+                 ON d.fecha_efecto BETWEEN pp.start_date AND pp.end_date
+             ${where}
+             ORDER BY d.fecha_efecto DESC, d.id DESC
+             LIMIT 200`,
+            params
+        );
+
+        return result.rows.map(row => ({
+            id: row.id,
+            employeeId: row.employee_id,
+            employeeCode: row.employee_code,
+            employeeName: row.employee_name,
+            fechaEfecto: row.fecha_efecto,
+            motivo: row.motivo,
+            tipoContrato: row.tipo_contrato,
+            liquidacionPagada: row.liquidacion_pagada,
+            periodoCode: row.periodo_code
+        }));
     }
 
-    async approveOvertime(overtimeId, approvedBy) {
-        return this._withTransaction(async client => {
-            const result = await client.query(
-                `UPDATE overtime_entries
-                 SET status = 'APROBADO',
-                     approved_by = $2::int,
-                     applied_at = CURRENT_TIMESTAMP
-                 WHERE id = $1
-                   AND status = 'PENDIENTE'
-                 RETURNING id, status`,
-                [overtimeId, approvedBy]
-            );
-            if (result.rows.length === 0) {
-                throw new NotFoundError(
-                    'Horas extra no encontradas o ya fueron aprobadas/canceladas.'
-                );
-            }
-            return result.rows[0];
-        });
+    async getDespidoByEmployee(employeeId) {
+        const result = await this._query(
+            `SELECT d.id, d.employee_id, d.fecha_efecto, d.motivo,
+                    d.tipo_contrato, d.liquidacion_pagada
+             FROM despido d
+             WHERE d.employee_id = $1
+             ORDER BY d.fecha_efecto DESC
+             LIMIT 1`,
+            [employeeId]
+        );
+        return result.rows[0] || null;
     }
 
-    async approveTimeEntry(timeEntryId, approvedBy) {
+    async createDespido({ employeeId, fechaEfecto, motivo, tipoContrato }) {
         return this._withTransaction(async client => {
-            const result = await client.query(
-                `UPDATE time_entries
-                 SET status = 'APROBADO',
-                     approved_by = $2::int,
-                     applied_at = CURRENT_TIMESTAMP
-                 WHERE id = $1
-                   AND status = 'PENDIENTE'
-                 RETURNING id, status`,
-                [timeEntryId, approvedBy]
+            // Marcar al empleado como cesado
+            await client.query(
+                `UPDATE employees
+                 SET fecha_cese = $2::date,
+                     status = 'BAJA'
+                 WHERE id = $1`,
+                [employeeId, fechaEfecto]
             );
-            if (result.rows.length === 0) {
-                throw new NotFoundError(
-                    'Registro de tiempo no encontrado o ya fue aprobado/cancelado.'
-                );
-            }
+
+            const result = await client.query(
+                `INSERT INTO despido
+                     (employee_id, fecha_efecto, motivo, tipo_contrato, liquidacion_pagada)
+                 VALUES ($1, $2::date, $3, $4, FALSE)
+                 RETURNING id, employee_id, fecha_efecto, motivo, tipo_contrato, liquidacion_pagada`,
+                [employeeId, fechaEfecto, motivo, tipoContrato]
+            );
             return result.rows[0];
         });
     }
 }
+
+module.exports = PayrollRepository;
 
 module.exports = PayrollRepository;
 

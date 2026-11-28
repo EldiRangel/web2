@@ -14,7 +14,7 @@ const pool   = require('../server/config/database');
         ];
 
         for (const u of usuarios) {
-            // La migracion de seguridad agrega person y users.person_id.
+            
             const personResult = await pool.query(
                 `INSERT INTO person (name, email, active)
                  VALUES ($1, $2, TRUE)

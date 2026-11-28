@@ -1,4 +1,4 @@
-// Manejo centralizado de errores: va al final de la cadena de middlewares
+// Manejo centralizado de errores
 module.exports = function errorHandler(err, req, res, next) {
     if (res.headersSent) {
         return next(err);

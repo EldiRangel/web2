@@ -3,6 +3,7 @@
 const { ConflictError, NotFoundError } = require('../errors/AppError');
 const PayrollRepository = require('../repositories/PayrollRepository');
 const PayrollCalculator = require('./PayrollCalculator');
+const VenezuelanPayroll = require('./VenezuelanPayroll');
 
 function round2(value) {
     return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
@@ -153,6 +154,77 @@ class Prenomina {
                 loanInstallments: installmentsByEmployee.get(employee.id) || []
             }))
         );
+
+        // --- Integracion nomina venezolana: deducciones de ley (Bloque 3) ---
+        const venezolano = new VenezuelanPayroll(this.repository);
+        const periodoStart = period.startDate;
+        const periodoEnd = period.endDate;
+
+        // Calcular dias del periodo
+        const start = new Date(periodoStart);
+        const end = new Date(periodoEnd);
+        const diasPeriodo = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+        for (const result of calculation.results) {
+            const emp = employees.find(e => e.id === result.employee.id);
+            if (!emp) continue;
+
+            // Calcular dias trabajados (considerando despidos - Bloque 4)
+            const diasInfo = await venezolano.getDiasTrabajadosPeriodo({
+                empleadoId: emp.id,
+                periodoStart,
+                periodoEnd
+            });
+
+            // Calcular deducciones de ley sobre el salario base del empleado
+            const salarioBaseEmp = result.baseSalary || 0;
+            const ley = await venezolano.calcularDeduccionesLey({
+                empleadoId: emp.id,
+                salarioBase: salarioBaseEmp,
+                diasTrabajados: diasInfo.diasTrabajados,
+                diasPeriodo: diasInfo.diasPeriodo
+            });
+
+            // Agregar lineas de deduccion de ley a las lineas del empleado
+            for (const linea of ley.deducciones) {
+                result.lines.push({
+                    conceptId: linea.conceptoId,
+                    conceptCode: linea.codigoConcepto,
+                    conceptName: linea.concepto,
+                    lineType: 'DEDUCCION',
+                    quantity: 1,
+                    rate: linea.tarifa,
+                    amount: linea.importe,
+                    sourceType: 'LEY',
+                    sourceId: linea.origenId
+                });
+            }
+
+            // Recalcular totalDeductions y netAmount del empleado
+            result.totalDeductions = Math.round(
+                (result.totalDeductions + ley.totalDeducciones) * 100
+            ) / 100;
+            result.netAmount = Math.round(
+                (result.totalEarnings - result.totalDeductions) * 100
+            ) / 100;
+
+            if (result.netAmount < 0) {
+                result.netAmount = 0;
+            }
+        }
+
+        // Recalcular totales globales despues de agregar deducciones de ley
+        const allLines = calculation.results.flatMap(r => r.lines);
+        calculation.totals.deducciones = Math.round(
+            calculation.results.reduce((sum, r) => sum + r.totalDeductions, 0) * 100
+        ) / 100;
+        calculation.totals.neto = Math.round(
+            calculation.results.reduce((sum, r) => sum + r.netAmount, 0) * 100
+        ) / 100;
+        calculation.totals.percepciones = Math.round(
+            calculation.results.reduce((sum, r) => sum + r.totalEarnings, 0) * 100
+        ) / 100;
+        calculation.totals.bruto = calculation.totals.percepciones;
 
         const saved = await this.repository.savePrenomina({
             periodCode: period.code,
